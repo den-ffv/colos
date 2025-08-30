@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+
+# Dependencies
+node_modules
+client/node_modules
+server/node_modules
+
+# Build outputs
+client/dist
+server/dist
+
+# Environment files
+.env*
+client/.env*
+server/.env*
+
+# Logs
+*.log
+logs
+
+# Cache
+.cache
+.parcel-cache
+*.tsbuildinfo
+
+# Editor
+.vscode
+.idea
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+coverage
+*.test.js
+
+# Documentation
+README.md
+*.md
+
+# Development files
+docker-compose.yml
+docker-compose.*.yml

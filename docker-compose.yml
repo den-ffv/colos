@@ -1,0 +1,29 @@
+services:
+  colos-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '80:80' # Nginx (клієнт)
+      - '3000:3000' # Node.js API (сервер)
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # Опціонально: монтуємо .env файли
+      - ./server/.env:/app/server/.env:ro
+    restart: unless-stopped
+    container_name: colos-logistics
+
+  # Опціонально: база даних
+  # postgres:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_DB: colos
+  #     POSTGRES_USER: colos_user
+  #     POSTGRES_PASSWORD: colos_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+# volumes:
+#   postgres_data:
