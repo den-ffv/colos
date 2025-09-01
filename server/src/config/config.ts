@@ -7,6 +7,7 @@ const EnvSchema = z.object({
   CORS_ORIGIN: z.string().optional(),
   OSRM_URL: z.string().url().optional(), // наприклад http://localhost:5000
   MAPBOX_TOKEN: z.string().optional(),
+  DATABASE_URL: z.string(),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

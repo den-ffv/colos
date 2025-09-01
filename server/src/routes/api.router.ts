@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { env } from '@/config';
+import { env } from '@/config/config';
 
 export const routeRouter: Router = Router();
 
