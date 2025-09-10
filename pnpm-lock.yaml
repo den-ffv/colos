@@ -7,12 +7,23 @@ settings:
 importers:
 
   .:
+    dependencies:
+      express-validator:
+        specifier: ^7.2.1
+        version: 7.2.1
     devDependencies:
+      '@types/express-validator':
+        specifier: ^3.0.2
+        version: 3.0.2
       concurrently:
         specifier: ^9.1.0
         version: 9.2.1
 
 packages:
+
+  '@types/express-validator@3.0.2':
+    resolution: {integrity: sha512-dV+1u6absDDEIVe5jd5ID1XYvPPvOSvggMWh09VYM3TeBjAjBDtwJWyJg/5PnK7s8FRgbOtHgD6oX3N2MKWwDw==}
+    deprecated: This is a stub types definition. express-validator provides its own type definitions, so you do not need this installed.
 
   ansi-regex@5.0.1:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
@@ -49,6 +60,10 @@ packages:
     resolution: {integrity: sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==}
     engines: {node: '>=6'}
 
+  express-validator@7.2.1:
+    resolution: {integrity: sha512-CjNE6aakfpuwGaHQZ3m8ltCG2Qvivd7RHtVMS/6nVxOM7xVGqr4bhflsm4+N5FP5zI7Zxp+Hae+9RE+o8e3ZOQ==}
+    engines: {node: '>= 8.0.0'}
+
   get-caller-file@2.0.5:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
     engines: {node: 6.* || 8.* || >= 10.*}
@@ -60,6 +75,9 @@ packages:
   is-fullwidth-code-point@3.0.0:
     resolution: {integrity: sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==}
     engines: {node: '>=8'}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
 
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
@@ -95,6 +113,10 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
+  validator@13.12.0:
+    resolution: {integrity: sha512-c1Q0mCiPlgdTVVVIJIrBuxNicYE+t/7oKeI9MWLj3fh/uq2Pxh/3eeWbVZ4OcGW1TUf53At0njHw5SMdA3tmMg==}
+    engines: {node: '>= 0.10'}
+
   wrap-ansi@7.0.0:
     resolution: {integrity: sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==}
     engines: {node: '>=10'}
@@ -112,6 +134,10 @@ packages:
     engines: {node: '>=12'}
 
 snapshots:
+
+  '@types/express-validator@3.0.2':
+    dependencies:
+      express-validator: 7.2.1
 
   ansi-regex@5.0.1: {}
 
@@ -149,11 +175,18 @@ snapshots:
 
   escalade@3.2.0: {}
 
+  express-validator@7.2.1:
+    dependencies:
+      lodash: 4.17.21
+      validator: 13.12.0
+
   get-caller-file@2.0.5: {}
 
   has-flag@4.0.0: {}
 
   is-fullwidth-code-point@3.0.0: {}
+
+  lodash@4.17.21: {}
 
   require-directory@2.1.1: {}
 
@@ -184,6 +217,8 @@ snapshots:
   tree-kill@1.2.2: {}
 
   tslib@2.8.1: {}
+
+  validator@13.12.0: {}
 
   wrap-ansi@7.0.0:
     dependencies:

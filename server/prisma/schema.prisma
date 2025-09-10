@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,12 +7,56 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Language {
+  ENG
+  UA
+}
+
+enum AccountType {
+  user
+  customer
+}
 model User {
   id        String   @id @default(cuid())
+  login     String   @unique
   email     String   @unique
+  password  String
   name      String?
+  lenguage  Language @default(UA)
+  is_active Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  UserRoles UserRole[]
   @@map("users")
 }
+
+model Role {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  is_admin      Boolean  @default(false)
+  is_logistic   Boolean  @default(false)
+  is_manager    Boolean  @default(false)
+  is_driver     Boolean  @default(false)
+  is_dispatcher Boolean  @default(false)
+  is_user       Boolean  @default(true)
+  is_active     Boolean  @default(true)
+
+  UserRoles UserRole[]
+  @@map("roles")
+} 
+
+model UserRole {
+  id        String   @id @default(cuid())
+  user_id    String
+  role_id    String
+  is_active Boolean  @default(true)
+
+
+  user User @relation(fields: [user_id], references: [id])
+  role Role @relation(fields: [role_id], references: [id])
+
+  @@unique([user_id, role_id])
+  @@map("user_roles")
+}
+
