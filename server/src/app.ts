@@ -11,6 +11,7 @@ import { publicRouter } from '@/routes/public.router';
 
 import { notFoundHandler, errorHandler } from '@/middlewares/error';
 import { authRouter } from './routes/auth.router';
+import { authCustomerRouter } from './routes/authCustomer.router';
 
 export function createApp(): Application {
   const app = express();
@@ -23,7 +24,9 @@ export function createApp(): Application {
   app.use(express.urlencoded({ extended: true }));
 
   app.use('/api/health', healthRouter);
+  
   app.use('/api/auth', authRouter);
+  app.use('/api/auth_customer', authCustomerRouter);
   app.use('/api', apiRouter);
   app.use('/public/api', publicRouter);
 
