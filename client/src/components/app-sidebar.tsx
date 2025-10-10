@@ -1,15 +1,16 @@
 'use client';
 import * as React from 'react';
-import { AudioWaveform, BookOpen, Bot, Command, GalleryVerticalEnd, Settings2, SquareTerminal } from 'lucide-react';
+import { AudioWaveform, Wallet, NotepadText, Command, GalleryVerticalEnd, Truck, MapPinned, House, Users, Bell, Inbox, Settings, Headset } from 'lucide-react';
 
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
-import { TeamSwitcher } from '@/components/team-switcher';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
 import { useTranslation } from 'react-i18next';
+import { useSidebar } from '@/hooks/use-sidebar';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation();
+  const { open } = useSidebar();
 
   const data = {
     user: {
@@ -36,97 +37,75 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     ],
     navMain: [
       {
-        title: t('Playground'),
+        title: t('Dashboard'),
+        url: '/dashboard',
+        icon: House,
+        isActive: true,
+      },
+      {
+        title: t('Tracking'),
         url: '#',
-        icon: SquareTerminal,
+        icon: MapPinned,
         isActive: true,
         items: [
           {
-            title: 'History',
-            url: '#',
-          },
-          {
-            title: 'Starred',
-            url: '#',
-          },
-          {
-            title: 'Settings',
-            url: '#',
+            title: 'Road Freight',
+            url: '/road_freight',
           },
         ],
       },
       {
-        title: t('Models'),
-        url: '#',
-        icon: Bot,
-        items: [
-          {
-            title: 'Genesis',
-            url: '#',
-          },
-          {
-            title: 'Explorer',
-            url: '#',
-          },
-          {
-            title: 'Quantum',
-            url: '#',
-          },
-        ],
+        title: t('Orders'),
+        url: '/orders',
+        icon: NotepadText,
       },
       {
-        title: t('Documentation'),
-        url: '#',
-        icon: BookOpen,
-        items: [
-          {
-            title: 'Introduction',
-            url: '#',
-          },
-          {
-            title: 'Get Started',
-            url: '#',
-          },
-          {
-            title: 'Tutorials',
-            url: '#',
-          },
-          {
-            title: 'Changelog',
-            url: '#',
-          },
-        ],
+        title: t('Cashflow'),
+        url: '/cashflow',
+        icon: Wallet,
       },
       {
-        title: t('Settings'),
-        url: '#',
-        icon: Settings2,
-        items: [
-          {
-            title: 'General',
-            url: '#',
-          },
-          {
-            title: 'Team',
-            url: '#',
-          },
-          {
-            title: 'Billing',
-            url: '#',
-          },
-          {
-            title: 'Limits',
-            url: '#',
-          },
-        ],
+        title: t('Unit'),
+        url: '/unit',
+        icon: Truck,
       },
-    ],
+      {
+        title: t('Customers'),
+        url: '/customers',
+        icon: Users,
+      },
+      {
+        title: 'Notifications',
+        url: '/notifications',
+        icon: Bell,
+      },
+      {
+        title: 'Messages',
+        url: '/messages',
+        icon: Inbox,
+      },
+      {
+        title: 'Settings',
+        url: '/settings',
+        icon: Settings,
+      },
+      {
+        title: 'Help & Support',
+        url: '/help',
+        icon: Headset,
+      }
+    ]
   };
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        {/* <TeamSwitcher teams={data.teams} /> */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 8 }}>
+          <p style={{fontWeight: 'bold', fontFamily:'monospace', fontSize: 20}}>{open ? 'COLOS' : 'C'}</p>
+          <SidebarTrigger className="-ml-1" />
+        </div>
+        <span style={{ display: 'block', background: '#dadadaff', width: '100%', height: 1 }} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
