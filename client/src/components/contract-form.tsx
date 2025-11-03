@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Field } from './ui/field';
 import { Separator } from './ui/separator';
-import { MapPin, Route, Calendar, Clock, User, Phone, AlertCircle } from 'lucide-react';
+import { MapPin, Route, Calendar, User, AlertCircle } from 'lucide-react';
 import { useFormValidation } from '../hooks/useFormValidation';
 
 // Встановіть ваш безкоштовний токен з mapbox.com в файлі .env
@@ -18,14 +18,54 @@ interface RoutePoint {
   address: string;
 }
 
+interface CargoItem {
+  name: string;
+  quantity: number;
+  weight: number; // в кг
+  volume?: number; // в м³
+  value?: number; // вартість в грн
+  category: string;
+  fragile: boolean;
+  description?: string;
+}
+
 interface ContractData {
-  customerName: string;
-  customerPhone: string;
-  departurePoint: RoutePoint;
-  destinationPoint: RoutePoint;
-  departureDate: string;
-  departureTime: string;
-  passengerCount: number;
+  // Відправник
+  senderName: string;
+  senderPhone: string;
+  senderEmail?: string;
+  senderCompany?: string;
+
+  // Отримувач
+  recipientName: string;
+  recipientPhone: string;
+  recipientEmail?: string;
+  recipientCompany?: string;
+
+  // Логістика
+  pickupPoint: RoutePoint;
+  deliveryPoint: RoutePoint;
+  pickupDate: string;
+  pickupTime: string;
+  deliveryDate?: string;
+  deliveryTime?: string;
+
+  // Товари
+  cargoItems: CargoItem[];
+  totalWeight: number;
+  totalVolume: number;
+  totalValue: number;
+
+  // Додаткові послуги
+  packingRequired: boolean;
+  insuranceRequired: boolean;
+  expressDelivery: boolean;
+
+  // Спеціальні вимоги
+  temperatureControlled: boolean;
+  hazardousMaterials: boolean;
+  oversizedCargo: boolean;
+
   additionalInfo: string;
 }
 
@@ -35,33 +75,62 @@ export default function ContractForm() {
   const { errors, validateContract, clearError } = useFormValidation();
 
   const [contractData, setContractData] = useState<ContractData>({
-    customerName: '',
-    customerPhone: '',
-    departurePoint: {
+    // Відправник
+    senderName: '',
+    senderPhone: '',
+    senderEmail: '',
+    senderCompany: '',
+
+    // Отримувач
+    recipientName: '',
+    recipientPhone: '',
+    recipientEmail: '',
+    recipientCompany: '',
+
+    // Логістика
+    pickupPoint: {
       name: '',
       coordinates: [30.5234, 50.4501], // Київ за замовчуванням
       address: ''
     },
-    destinationPoint: {
+    deliveryPoint: {
       name: '',
       coordinates: [30.5234, 50.4501],
       address: ''
     },
-    departureDate: '',
-    departureTime: '',
-    passengerCount: 1,
+    pickupDate: '',
+    pickupTime: '',
+    deliveryDate: '',
+    deliveryTime: '',
+
+    // Товари
+    cargoItems: [],
+    totalWeight: 0,
+    totalVolume: 0,
+    totalValue: 0,
+
+    // Додаткові послуги
+    packingRequired: false,
+    insuranceRequired: false,
+    expressDelivery: false,
+
+    // Спеціальні вимоги
+    temperatureControlled: false,
+    hazardousMaterials: false,
+    oversizedCargo: false,
+
     additionalInfo: ''
   });
 
   const [markers, setMarkers] = useState<{
-    departure?: mapboxgl.Marker;
-    destination?: mapboxgl.Marker;
+    pickup?: mapboxgl.Marker;
+    delivery?: mapboxgl.Marker;
   }>({});
 
   const [route, setRoute] = useState<{
     distance: number;
     duration: number;
-    geometry: any;
+    geometry: object;
   } | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -74,14 +143,16 @@ export default function ContractForm() {
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
         center: [30.5234, 50.4501], // Київ
-        zoom: 10
+        zoom: 6, // Зменшили zoom для більш широкого огляду
+        minZoom: 3, // Мінімальний zoom для України
+        maxZoom: 16 // Максимальний zoom
       });
 
       map.current.addControl(new mapboxgl.NavigationControl());
     }
   }, []);
 
-  const addMarker = (coordinates: [number, number], type: 'departure' | 'destination') => {
+  const addMarker = (coordinates: [number, number], type: 'pickup' | 'delivery') => {
     if (!map.current) return;
 
     // Видаляємо попередній маркер цього типу
@@ -89,7 +160,7 @@ export default function ContractForm() {
       markers[type]!.remove();
     }
 
-    const color = type === 'departure' ? '#10b981' : '#ef4444';
+    const color = type === 'pickup' ? '#10b981' : '#ef4444';
     const marker = new mapboxgl.Marker({ color })
       .setLngLat(coordinates)
       .addTo(map.current);
@@ -103,7 +174,7 @@ export default function ContractForm() {
     setContractData(prev => ({
       ...prev,
       [`${type}Point`]: {
-        ...prev[type === 'departure' ? 'departurePoint' : 'destinationPoint'],
+        ...prev[type === 'pickup' ? 'pickupPoint' : 'deliveryPoint'],
         coordinates
       }
     }));
@@ -166,7 +237,10 @@ export default function ContractForm() {
         const coordinates = routeGeoJSON.coordinates;
         const bounds = new mapboxgl.LngLatBounds();
         coordinates.forEach((coord: [number, number]) => bounds.extend(coord));
-        map.current.fitBounds(bounds, { padding: 50 });
+        map.current.fitBounds(bounds, {
+          padding: 100, // Збільшили відступи
+          maxZoom: 12   // Обмежили максимальний zoom
+        });
       }
     } catch (error) {
       console.error('Error getting route:', error);

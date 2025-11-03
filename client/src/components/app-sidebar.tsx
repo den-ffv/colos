@@ -52,6 +52,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: 'Road Freight',
             url: '/road_freight',
           },
+          {
+            title: 'Logistics',
+            url: '/logistics',
+          },
         ],
       },
       {

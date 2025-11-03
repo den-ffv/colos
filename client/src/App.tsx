@@ -4,10 +4,14 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { LoginForm } from "./components/login-form";
 import ContractForm from "./components/contract-form";
 import ContractsList from "./components/contracts-list";
-import { useAuth } from "./hooks/useAuth";
+import LogisticsContractForm from "./components/logistics-contract-form";
+// import { useAuth } from "./hooks/useAuth";
 
 function App() {
-  const { user, loading } = useAuth()
+  // Тимчасово відключаємо authentication для тестування
+  // const { user, loading } = useAuth()
+  const user = { id: 'test', type: 'test' }; // Тестовий користувач
+  const loading = false;
 
   if (loading) return null
 
@@ -26,35 +30,43 @@ function App() {
       <Routes>
         <Route path="/dashboard" element={
           <SidebarInset>
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-              <div className="flex items-center gap-2 px-4">
-                {/* <SidebarTrigger className="-ml-1" /> */}
+            <div className="container mx-auto p-6">
+              <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-blue-100 p-6 rounded-lg">
+                  <h2 className="text-xl font-semibold mb-2">Всього договорів</h2>
+                  <p className="text-3xl font-bold text-blue-600">25</p>
+                </div>
+                <div className="bg-green-100 p-6 rounded-lg">
+                  <h2 className="text-xl font-semibold mb-2">Активні</h2>
+                  <p className="text-3xl font-bold text-green-600">12</p>
+                </div>
+                <div className="bg-yellow-100 p-6 rounded-lg">
+                  <h2 className="text-xl font-semibold mb-2">Очікують</h2>
+                  <p className="text-3xl font-bold text-yellow-600">8</p>
+                </div>
               </div>
-            </header>
-            <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-              <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-                <div className="aspect-video rounded-xl bg-muted/50" />
-                <div className="aspect-video rounded-xl bg-muted/50" />
-                <div className="aspect-video rounded-xl bg-muted/50" />
-              </div>
-              <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
             </div>
           </SidebarInset>
         } />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
 
-        {/* <Route path="/contract" element={
+        <Route path="/contract" element={
           <SidebarInset>
             <ContractForm />
           </SidebarInset>
-        } /> */}
-        <Route path="/contracts" element={
+        } />
+
+        <Route path="/logistics" element={
+          <SidebarInset>
+            <LogisticsContractForm />
+          </SidebarInset>
+        } />
+
+        <Route path="/road_freight" element={
           <SidebarInset>
             <ContractsList />
           </SidebarInset>
         } />
-
-        <Route path="/road_freight" element={<p> orders </p>} />
         <Route path="/orders" element={<p> orders </p>} />
         <Route path="/cashflow" element={<p> cashflow </p>} />
         <Route path="/unit" element={<p> unit </p>} />
@@ -63,6 +75,8 @@ function App() {
         <Route path="/messages" element={<p> messages </p>} />
         <Route path="/settings" element={<p> settings </p>} />
         <Route path="/help" element={<p> help </p>} />
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </SidebarProvider>
   )
