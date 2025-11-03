@@ -1,5 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { LoginForm } from "./components/login-form";
 import ContractForm from "./components/contract-form";
@@ -28,7 +28,7 @@ function App() {
           <SidebarInset>
             <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
               <div className="flex items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1" />
+                {/* <SidebarTrigger className="-ml-1" /> */}
               </div>
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
@@ -41,18 +41,19 @@ function App() {
             </div>
           </SidebarInset>
         } />
-        <Route path="/about" element={<p> test2</p>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/contract" element={
+
+        {/* <Route path="/contract" element={
           <SidebarInset>
             <ContractForm />
           </SidebarInset>
-        } />
+        } /> */}
         <Route path="/contracts" element={
           <SidebarInset>
             <ContractsList />
           </SidebarInset>
         } />
+
         <Route path="/road_freight" element={<p> orders </p>} />
         <Route path="/orders" element={<p> orders </p>} />
         <Route path="/cashflow" element={<p> cashflow </p>} />
