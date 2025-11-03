@@ -2,6 +2,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { LoginForm } from "./components/login-form";
+import ContractForm from "./components/contract-form";
+import ContractsList from "./components/contracts-list";
 import { useAuth } from "./hooks/useAuth";
 
 function App() {
@@ -41,6 +43,25 @@ function App() {
         } />
         <Route path="/about" element={<p> test2</p>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/contract" element={
+          <SidebarInset>
+            <ContractForm />
+          </SidebarInset>
+        } />
+        <Route path="/contracts" element={
+          <SidebarInset>
+            <ContractsList />
+          </SidebarInset>
+        } />
+        <Route path="/road_freight" element={<p> orders </p>} />
+        <Route path="/orders" element={<p> orders </p>} />
+        <Route path="/cashflow" element={<p> cashflow </p>} />
+        <Route path="/unit" element={<p> unit </p>} />
+        <Route path="/customers" element={<p> customers </p>} />
+        <Route path="/notifications" element={<p> notifications </p>} />
+        <Route path="/messages" element={<p> messages </p>} />
+        <Route path="/settings" element={<p> settings </p>} />
+        <Route path="/help" element={<p> help </p>} />
       </Routes>
     </SidebarProvider>
   )
