@@ -1,16 +1,14 @@
 'use client';
 import * as React from 'react';
-import { AudioWaveform, Wallet, NotepadText, Command, GalleryVerticalEnd, Truck, MapPinned, House, Users, Bell, Inbox, Settings, Headset } from 'lucide-react';
+import { AudioWaveform, Wallet, NotepadText, Command, GalleryVerticalEnd, Truck, MapPinned, House, Users, Bell, Inbox, Settings, Headset, Navigation, MapPin } from 'lucide-react';
 
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { useTranslation } from 'react-i18next';
-import { useSidebar } from '@/hooks/use-sidebar';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation();
-  const { open } = useSidebar();
 
   const data = {
     user: {
@@ -40,19 +38,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         title: t('Dashboard'),
         url: '/dashboard',
         icon: House,
-        isActive: true,
       },
       {
-        title: t('Tracking'),
-        url: '#',
+        title: 'Road Freight',
+        url: '/road_freight',
         icon: MapPinned,
-        isActive: true,
-        items: [
-          {
-            title: 'Road Freight',
-            url: '/road_freight',
-          },
-        ],
+      },
+      {
+        title: 'Logistics',
+        url: '/logistics',
+        icon: Navigation,
       },
       {
         title: t('Orders'),
@@ -100,10 +95,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        {/* <TeamSwitcher teams={data.teams} /> */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 8 }}>
-          <p style={{fontWeight: 'bold', fontFamily:'monospace', fontSize: 20}}>{open ? 'COLOS' : 'C'}</p>
-          <SidebarTrigger className="-ml-1" />
+        <div className="flex items-center justify-center w-full">
+          <p>{<MapPin color='#1d15fbff'/>}</p>
         </div>
         <span style={{ display: 'block', background: '#dadadaff', width: '100%', height: 1 }} />
       </SidebarHeader>
@@ -113,7 +106,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         <NavUser user={data.user} />
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   );
 }

@@ -19,7 +19,7 @@ function App() {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <AppSidebar />
       <Routes>
         <Route path="/dashboard" element={
