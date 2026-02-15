@@ -1,42 +1,295 @@
 #root {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 24px;
+}
+
+.auth {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.auth__header {
+  text-align: left;
+}
+
+.auth__title {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: 0.2px;
+}
+
+.auth__subtitle {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.auth__card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.auth__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.auth__tab {
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.auth__tab--active {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.auth__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.auth__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.auth__label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.auth__input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.auth__input:focus {
+  outline: 2px solid rgba(100, 108, 255, 0.65);
+  border-color: transparent;
+}
+
+.auth__alert {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.auth__alert--error {
+  background: rgba(255, 80, 80, 0.12);
+  border: 1px solid rgba(255, 80, 80, 0.25);
+}
+
+.auth__alert--success {
+  background: rgba(80, 255, 160, 0.12);
+  border: 1px solid rgba(80, 255, 160, 0.25);
+}
+
+.auth__submit {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(100, 108, 255, 0.18);
+}
+
+.auth__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth__meta {
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth__metaRow {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.auth__metaLabel {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.auth__metaValue {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+
+.auth__link {
+  background: transparent;
+  border: 0;
+  color: #9aa1ff;
+  padding: 0;
+}
+
+.auth__footer {
+  text-align: left;
+}
+
+.auth__hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+@media (prefers-color-scheme: light) {
+  .auth__subtitle,
+  .auth__label,
+  .auth__metaLabel,
+  .auth__hint {
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .auth__card {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 0.75);
+  }
+
+  .auth__tab {
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .auth__tab--active {
+    color: rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  .auth__input {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 0.8);
+    color: rgba(0, 0, 0, 0.9);
+  }
+
+  .auth__meta {
+    border-top-color: rgba(0, 0, 0, 0.16);
+  }
+
+  .auth__metaValue {
+    color: rgba(0, 0, 0, 0.85);
+  }
+}
+
+.crm {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 16px;
+  align-items: start;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.crm__sidebar {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  position: sticky;
+  top: 16px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.crm__brand {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  text-align: left;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.crm__nav {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.card {
-  padding: 2em;
+.crm__navBtn {
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.read-the-docs {
-  color: #888;
+.crm__navBtn--active {
+  border-color: rgba(100, 108, 255, 0.65);
+  background: rgba(100, 108, 255, 0.12);
+}
+
+.crm__main {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 14px;
+  min-height: 420px;
+}
+
+.crm__topbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 12px;
+}
+
+.crm__title {
+  margin: 0;
+  font-size: 18px;
+  text-align: left;
+}
+
+.crm__user {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.crm__email {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crm__logout {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }

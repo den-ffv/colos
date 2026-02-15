@@ -14,7 +14,7 @@ cd server && npm install
 cd ../client && npm install
 ```
 
-2. Налаштувати .env для server (за бажанням)
+2. Налаштувати `.env` для server
 
 Створи файл `server/.env` на основі `server/.env.example` і за потреби зміни `DATABASE_URL`.
 
@@ -66,6 +66,6 @@ docker compose up --build
 Після запуску відкрий у браузері:
 
 - клієнт: http://localhost:5173
-- бекенд health: http://localhost:4000/health
+- бекенд health: http://localhost:4000/api/health
 
 Prisma в контейнері серверу застосує міграції при старті (`prisma migrate deploy`).

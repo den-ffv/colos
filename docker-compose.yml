@@ -20,16 +20,23 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/colos?schema=public
       CLIENT_ORIGIN: http://localhost:5173
       PORT: 4000
+      JWT_ACCESS_SECRET: dev_access_secret_change_me
+      JWT_REFRESH_SECRET: dev_refresh_secret_change_me
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 30d
     depends_on:
       - db
     ports:
       - "4000:4000"
 
   client:
-    build: ./client
+    build:
+      context: ./client
+      args:
+        # Це значення "вшивається" у Vite build і має бути доступним з браузера.
+        # Для локального запуску через docker compose це host-порти.
+        VITE_API_URL: http://localhost:4000
     container_name: colos-client
-    environment:
-      VITE_API_URL: http://server:4000
     depends_on:
       - server
     ports:

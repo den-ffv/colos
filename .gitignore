@@ -1,5 +1,11 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
+!.env.example
+!**/.env.example
 *.log
 .DS_Store
+server/.env
+client/.env

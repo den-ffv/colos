@@ -1,14 +1,18 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
-
-dotenv.config();
+import { apiRouter } from './router/api.router';
+import { prisma } from './utils/prisma';
+import { env } from './config/env';
 
 export const app: Application = express();
-export const prisma = new PrismaClient();
 
-app.use(cors());
+const CLIENT_ORIGIN = env.CLIENT_ORIGIN;
+app.use(
+  cors({
+    origin: CLIENT_ORIGIN ? [CLIENT_ORIGIN] : true,
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
 // Health check
@@ -20,7 +24,8 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+app.use('/api', apiRouter);
+
 
 // Graceful shutdown
 const shutdown = async () => {
@@ -32,7 +37,7 @@ const shutdown = async () => {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-app.listen(PORT, () => {
-  console.log(`🚀 Сервер запущено на порту ${PORT}`);
+app.listen(env.PORT, () => {
+  console.log(`🚀 Сервер запущено на порту ${env.PORT}`);
   console.log(`📊 Prisma підключено до PostgreSQL`);
 });
