@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { AuthTokens } from '../auth/auth.storage';
 import { tryGetEmailFromJwt } from './jwt';
+import { Dashboard } from './Dashboard';
+import { Button } from '../../ui/Button';
+import { ClientsPage } from '../clients/ClientsPage';
 
 type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles';
 
@@ -67,15 +70,17 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
           <h2 className="crm__title">{title}</h2>
           <div className="crm__user">
             <span className="crm__email">{email ?? '—'}</span>
-            <button type="button" className="crm__logout" onClick={onLogout}>
+            <Button type="button" variant="ghost" size="sm" className="crm__logout" onClick={onLogout}>
               Вийти
-            </button>
+            </Button>
           </div>
         </header>
 
         <section>
           {view === 'dashboard' ? (
-            <p>Готово: логін → редірект у CRM. Далі додамо реальні сторінки та запити до API.</p>
+            <Dashboard tokens={tokens} onUnauthorized={onLogout} />
+          ) : view === 'clients' ? (
+            <ClientsPage tokens={tokens} onUnauthorized={onLogout} />
           ) : (
             <p>Сторінка `{title}` в розробці.</p>
           )}
@@ -84,4 +89,3 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
     </div>
   );
 }
-

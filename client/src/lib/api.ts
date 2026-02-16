@@ -13,21 +13,20 @@ async function readResponseBody(response: Response): Promise<unknown> {
   return text ? { message: text } : null;
 }
 
-export async function apiPostJson<TResponse>(
+async function requestJson<TResponse>(
   path: string,
-  body: unknown,
-  init?: Omit<RequestInit, 'method' | 'body'>,
+  init: Omit<RequestInit, 'body'> & { body?: unknown; method: string },
 ): Promise<TResponse> {
   const baseUrl = getApiBaseUrl();
   const url = new URL(path, baseUrl).toString();
   const headers = new Headers(init?.headers);
-  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  const hasBody = init.body !== undefined && init.body !== null && init.method !== 'GET' && init.method !== 'HEAD';
+  if (hasBody && !headers.has('content-type')) headers.set('content-type', 'application/json');
 
   const response = await fetch(url, {
     ...init,
-    method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body: hasBody ? JSON.stringify(init.body) : undefined,
   });
 
   const data = await readResponseBody(response);
@@ -41,4 +40,34 @@ export async function apiPostJson<TResponse>(
   }
 
   return data as TResponse;
+}
+
+export async function apiPostJson<TResponse>(
+  path: string,
+  body: unknown,
+  init?: Omit<RequestInit, 'method' | 'body'>,
+): Promise<TResponse> {
+  return requestJson<TResponse>(path, { ...init, method: 'POST', body });
+}
+
+export async function apiPutJson<TResponse>(
+  path: string,
+  body: unknown,
+  init?: Omit<RequestInit, 'method' | 'body'>,
+): Promise<TResponse> {
+  return requestJson<TResponse>(path, { ...init, method: 'PUT', body });
+}
+
+export async function apiDeleteJson<TResponse>(
+  path: string,
+  init?: Omit<RequestInit, 'method' | 'body'>,
+): Promise<TResponse> {
+  return requestJson<TResponse>(path, { ...init, method: 'DELETE' });
+}
+
+export async function apiGetJson<TResponse>(
+  path: string,
+  init?: Omit<RequestInit, 'method'>,
+): Promise<TResponse> {
+  return requestJson<TResponse>(path, { ...init, method: 'GET' });
 }

@@ -3,6 +3,7 @@ import cors from 'cors';
 import { apiRouter } from './router/api.router';
 import { prisma } from './utils/prisma';
 import { env } from './config/env';
+import { errorHandler } from './middleware/errorHandler';
 
 export const app: Application = express();
 
@@ -25,6 +26,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 });
 
 app.use('/api', apiRouter);
+app.use(errorHandler);
 
 
 // Graceful shutdown

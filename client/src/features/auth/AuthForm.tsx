@@ -2,6 +2,7 @@ import { type FormEvent, useMemo, useState } from 'react';
 import { apiPostJson, type ApiError } from '../../lib/api';
 import { getApiBaseUrl } from '../../lib/env';
 import { clearAuthTokens, getAuthTokens, setAuthTokens, type AuthTokens } from './auth.storage';
+import { Button } from '../../ui/Button';
 
 type SignInResponse = {
   accessToken?: string;
@@ -9,6 +10,8 @@ type SignInResponse = {
   token?: string;
   user?: unknown;
 };
+
+type ApiResponse<T> = { success: true; data: T } | { success: false; message: string; details?: unknown };
 
 type Mode = 'signin' | 'signup';
 
@@ -27,10 +30,14 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
 
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
 
-  function finalizeAuth(res: SignInResponse) {
-    const accessToken = res.accessToken ?? res.token;
+  function finalizeAuth(res: ApiResponse<SignInResponse> | SignInResponse) {
+    const payload =
+      typeof res === 'object' && res && 'success' in res && (res as { success: unknown }).success === true
+        ? (res as ApiResponse<SignInResponse>).data
+        : (res as SignInResponse);
+    const accessToken = payload.accessToken ?? payload.token;
     if (!accessToken) return false;
-    const next = { accessToken, refreshToken: res.refreshToken };
+    const next = { accessToken, refreshToken: payload.refreshToken };
     setAuthTokens(next);
     setTokens(next);
     onSignedIn?.(next);
@@ -47,12 +54,16 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
 
     try {
       if (mode === 'signin') {
-        const res = await apiPostJson<SignInResponse>('/api/auth/signin', { email, password }, { credentials: 'include' });
+        const res = await apiPostJson<ApiResponse<SignInResponse>>(
+          '/api/auth/signin',
+          { email, password },
+          { credentials: 'include' },
+        );
         if (!finalizeAuth(res)) {
           setSuccess('Запит виконано, але сервер не повернув токен (endpoint ще заглушка?).');
         }
       } else {
-        const res = await apiPostJson<SignInResponse>(
+        const res = await apiPostJson<ApiResponse<SignInResponse>>(
           '/api/auth/signup',
           { email, password, first_name: firstName, last_name: lastName, company_name: companyName },
           { credentials: 'include' },
@@ -84,7 +95,7 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
         <p className="auth__subtitle">Авторизація</p>
       </header>
 
-      <section className="auth__card">
+      <section className="ui-card auth__card">
         <div className="auth__tabs" role="tablist" aria-label="Auth mode">
           <button
             type="button"
@@ -108,7 +119,7 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
               <label className="auth__field">
                 <span className="auth__label">Імʼя</span>
                 <input
-                  className="auth__input"
+                  className="ui-input auth__input"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   autoComplete="given-name"
@@ -118,7 +129,7 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
               <label className="auth__field">
                 <span className="auth__label">Прізвище</span>
                 <input
-                  className="auth__input"
+                  className="ui-input auth__input"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   autoComplete="family-name"
@@ -131,7 +142,7 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
             <label className="auth__field">
               <span className="auth__label">Компанія</span>
               <input
-                className="auth__input"
+                className="ui-input auth__input"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 autoComplete="organization"
@@ -143,7 +154,7 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
           <label className="auth__field">
             <span className="auth__label">Email</span>
             <input
-              className="auth__input"
+              className="ui-input auth__input"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -156,7 +167,7 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
           <label className="auth__field">
             <span className="auth__label">Пароль</span>
             <input
-              className="auth__input"
+              className="ui-input auth__input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -169,9 +180,9 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
           {error ? <div className="auth__alert auth__alert--error">{error}</div> : null}
           {success ? <div className="auth__alert auth__alert--success">{success}</div> : null}
 
-          <button className="auth__submit" type="submit" disabled={isSubmitting}>
+          <Button className="auth__submit" variant="primary" type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Зачекай…' : mode === 'signin' ? 'Увійти' : 'Створити акаунт'}
-          </button>
+          </Button>
 
           <div className="auth__meta">
             <div className="auth__metaRow">
@@ -182,9 +193,9 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
               <span className="auth__metaLabel">Токени:</span>
               <code className="auth__metaValue">{tokens ? 'є (localStorage)' : 'нема'}</code>
               {tokens ? (
-                <button type="button" className="auth__link" onClick={onLogout}>
+                <Button type="button" variant="ghost" size="sm" className="auth__link" onClick={onLogout}>
                   Вийти
-                </button>
+                </Button>
               ) : null}
             </div>
           </div>

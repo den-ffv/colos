@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { prisma } from '../utils/prisma';
 import { signAccessToken, signRefreshToken } from '../utils/jwt';
+import { requireAuth, type AuthenticatedRequest } from '../middleware/auth';
+import { fail, ok } from '../utils/http';
 
 export const authRouter = express.Router();
 
@@ -33,17 +35,17 @@ authRouter.post('/signin', async (req: Request, res: Response) => {
   try {
     const email = normalizeEmail((req.body as Record<string, unknown> | null)?.email);
     const password = ensureString((req.body as Record<string, unknown> | null)?.password);
-    if (!email || !password) return badRequest(res, 'email and password are required');
+    if (!email || !password) return fail(res, 400, 'email and password are required');
 
     const user = await prisma.user.findUnique({
       where: { email },
       include: { UserRoles: true },
     });
-    if (!user) return unauthorized(res);
-    if (!user.is_active) return res.status(403).json({ message: 'User is inactive' } satisfies JsonError);
+    if (!user) return fail(res, 401, 'Invalid email or password');
+    if (!user.is_active) return fail(res, 403, 'User is inactive');
 
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return unauthorized(res);
+    const passwordOk = await bcrypt.compare(password, user.password);
+    if (!passwordOk) return fail(res, 401, 'Invalid email or password');
 
     const roles = user.UserRoles.map((r) => r.role);
     const accessToken = signAccessToken({
@@ -61,7 +63,7 @@ authRouter.post('/signin', async (req: Request, res: Response) => {
       path: '/api/auth',
     });
 
-    return res.json({
+    return ok(res, {
       accessToken,
       refreshToken,
       user: {
@@ -78,15 +80,9 @@ authRouter.post('/signin', async (req: Request, res: Response) => {
     const message =
       typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : 'Unknown error';
     if (name === 'PrismaClientInitializationError') {
-      return res.status(500).json({
-        message: 'Database connection/permissions error. Check DATABASE_URL and DB grants.',
-        details: process.env.NODE_ENV === 'production' ? undefined : message,
-      });
+      return fail(res, 500, 'Database connection/permissions error. Check DATABASE_URL and DB grants.', message);
     }
-    return res.status(500).json({
-      message: 'Internal server error',
-      details: process.env.NODE_ENV === 'production' ? undefined : message,
-    });
+    return fail(res, 500, 'Internal server error', message);
   }
 });
 
@@ -97,17 +93,17 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
     const password = ensureString(body.password);
     const firstName = ensureString(body.first_name);
     const lastName = ensureString(body.last_name);
-    // const companyId = ensureString(body.company_id);
-    // const companyName = ensureString(body.company_name);
+    const companyId = ensureString(body.company_id);
+    const companyName = ensureString(body.company_name);
 
     if (!email || !password || !firstName || !lastName) {
-      return badRequest(res, 'email, password, first_name, last_name are required');
+      return fail(res, 400, 'email, password, first_name, last_name are required');
     }
-    if (password.length < 6) return badRequest(res, 'password must be at least 6 characters');
-    // if (!companyId && !companyName) return badRequest(res, 'company_id or company_name is required');
+    if (password.length < 6) return fail(res, 400, 'password must be at least 6 characters');
+    if (!companyId && !companyName) return fail(res, 400, 'company_id or company_name is required');
 
     const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) return res.status(409).json({ message: 'Email already in use' } satisfies JsonError);
+    if (existing) return fail(res, 409, 'Email already in use');
 
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -117,7 +113,7 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
         password: passwordHash,
         first_name: firstName,
         last_name: lastName,
-        company_id: '1231312',
+        company: companyId ? { connect: { id: companyId } } : { create: { name: companyName as string } },
         UserRoles: { create: [{ role: 'ADMIN' }] },
       },
       include: { UserRoles: true },
@@ -139,36 +135,58 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
       path: '/api/auth',
     });
 
-    return res.status(201).json({
-      accessToken,
-      refreshToken,
-      user: {
-        id: created.id,
-        email: created.email,
-        first_name: created.first_name,
-        last_name: created.last_name,
-        company_id: created.company_id,
-        roles,
+    return ok(
+      res,
+      {
+        accessToken,
+        refreshToken,
+        user: {
+          id: created.id,
+          email: created.email,
+          first_name: created.first_name,
+          last_name: created.last_name,
+          company_id: created.company_id,
+          roles,
+        },
       },
-    });
+      201,
+    );
   } catch (err) {
     const name = typeof err === 'object' && err && 'name' in err ? String((err as { name: unknown }).name) : '';
     const message =
       typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : 'Unknown error';
     if (name === 'PrismaClientInitializationError') {
-      return res.status(500).json({
-        message: 'Database connection/permissions error. Check DATABASE_URL and DB grants.',
-        details: process.env.NODE_ENV === 'production' ? undefined : message,
-      });
+      return fail(res, 500, 'Database connection/permissions error. Check DATABASE_URL and DB grants.', message);
     }
-    return res.status(500).json({
-      message: 'Internal server error',
-      details: process.env.NODE_ENV === 'production' ? undefined : message,
-    });
+    return fail(res, 500, 'Internal server error', message);
   }
 });
 
 authRouter.post('/logout', (req, res) => {
   res.clearCookie('refresh_token', { path: '/api/auth' });
-  res.json({ ok: true });
+  return ok(res, { ok: true });
+});
+
+authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
+  const auth = (req as AuthenticatedRequest).auth;
+  try {
+    const user = await prisma.user.findFirst({
+      where: { id: auth.sub, company_id: auth.company_id },
+      include: { UserRoles: true, company: true },
+    });
+    if (!user) return fail(res, 404, 'User not found');
+
+    return ok(res, {
+      id: user.id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      company: { id: user.company.id, name: user.company.name },
+      roles: user.UserRoles.map((r) => r.role),
+    });
+  } catch (err) {
+    const message =
+      typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : 'Unknown error';
+    return fail(res, 500, 'Internal server error', message);
+  }
 });

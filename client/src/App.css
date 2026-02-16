@@ -25,20 +25,17 @@
 
 .auth__subtitle {
   margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
 }
 
 .auth__card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  background: rgba(0, 0, 0, 0.2);
   overflow: hidden;
 }
 
 .auth__tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--border);
 }
 
 .auth__tab {
@@ -46,12 +43,12 @@
   background: transparent;
   border: 0;
   border-radius: 0;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
 }
 
 .auth__tab--active {
-  color: rgba(255, 255, 255, 0.92);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 .auth__form {
@@ -76,20 +73,15 @@
 
 .auth__label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--muted);
 }
 
 .auth__input {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.15);
-  color: rgba(255, 255, 255, 0.9);
+  /* colors & spacing come from .ui-input */
 }
 
 .auth__input:focus {
-  outline: 2px solid rgba(100, 108, 255, 0.65);
-  border-color: transparent;
+  /* focus styles come from .ui-input */
 }
 
 .auth__alert {
@@ -110,21 +102,18 @@
 }
 
 .auth__submit {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(100, 108, 255, 0.18);
+  width: 100%;
+  justify-content: center;
 }
 
 .auth__submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  /* disabled styles come from <Button/> */
 }
 
 .auth__meta {
   margin-top: 2px;
   padding-top: 10px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.16);
+  border-top: 1px dashed var(--border);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -139,12 +128,12 @@
 
 .auth__metaLabel {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--muted);
 }
 
 .auth__metaValue {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -152,10 +141,15 @@
 }
 
 .auth__link {
-  background: transparent;
-  border: 0;
-  color: #9aa1ff;
   padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+}
+
+.auth__link:hover {
+  color: var(--accent-2);
+  text-decoration: underline;
 }
 
 .auth__footer {
@@ -164,60 +158,24 @@
 
 .auth__hint {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.58);
-}
-
-@media (prefers-color-scheme: light) {
-  .auth__subtitle,
-  .auth__label,
-  .auth__metaLabel,
-  .auth__hint {
-    color: rgba(0, 0, 0, 0.6);
-  }
-
-  .auth__card {
-    border-color: rgba(0, 0, 0, 0.12);
-    background: rgba(255, 255, 255, 0.75);
-  }
-
-  .auth__tab {
-    color: rgba(0, 0, 0, 0.6);
-  }
-
-  .auth__tab--active {
-    color: rgba(0, 0, 0, 0.9);
-    background: rgba(0, 0, 0, 0.05);
-  }
-
-  .auth__input {
-    border-color: rgba(0, 0, 0, 0.12);
-    background: rgba(255, 255, 255, 0.8);
-    color: rgba(0, 0, 0, 0.9);
-  }
-
-  .auth__meta {
-    border-top-color: rgba(0, 0, 0, 0.16);
-  }
-
-  .auth__metaValue {
-    color: rgba(0, 0, 0, 0.85);
-  }
+  color: var(--muted);
 }
 
 .crm {
   max-width: 1280px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 260px 1fr;
   gap: 16px;
   align-items: start;
 }
 
 .crm__sidebar {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
   padding: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: #0b1220;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   position: sticky;
   top: 16px;
 }
@@ -226,6 +184,7 @@
   font-weight: 700;
   letter-spacing: 0.2px;
   text-align: left;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .crm__nav {
@@ -240,18 +199,26 @@
   padding: 10px 10px;
   border-radius: 10px;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.crm__navBtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .crm__navBtn--active {
-  border-color: rgba(100, 108, 255, 0.65);
-  background: rgba(100, 108, 255, 0.12);
+  border-color: rgba(124, 58, 237, 0.55);
+  background: rgba(124, 58, 237, 0.18);
+  color: rgba(255, 255, 255, 0.96);
 }
 
 .crm__main {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
   padding: 14px;
   min-height: 420px;
 }
@@ -262,7 +229,7 @@
   align-items: center;
   justify-content: space-between;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
 }
 
@@ -280,7 +247,7 @@
 
 .crm__email {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
   max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -288,8 +255,275 @@
 }
 
 .crm__logout {
-  padding: 8px 10px;
-  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dash__filters {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.dash__filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dash__label {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: left;
+}
+
+.dash__seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  width: fit-content;
+  background: var(--surface);
+}
+
+.dash__segBtn {
+  border: 0;
+  border-radius: 0;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 8px 10px;
+  color: var(--muted);
+}
+
+.dash__segBtn--active {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.dash__range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.dash__rangeItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dash__input {
+  padding: 9px 10px;
+}
+
+.dash__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dash__refresh,
+.dash__export {
+  /* button styles come from <Button/> */
+}
+
+.dash__error {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 80, 80, 0.25);
+  background: rgba(255, 80, 80, 0.12);
+  text-align: left;
+  font-size: 13px;
+}
+
+.kpi__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.kpi__card {
+  padding: 12px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kpi__head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kpi__name {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.kpi__sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.kpi__value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.kpi__delta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ops__grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+}
+
+.ops__card {
+  padding: 12px;
+  text-align: left;
+}
+
+.ops__title,
+.fin__title {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.kanban__col {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--surface-2);
+}
+
+.kanban__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.kanban__name {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.kanban__count {
+  font-weight: 700;
+}
+
+.kanban__hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.inc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inc__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 6px;
+}
+
+.inc__hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.table__head,
+.table__row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.table--compact .table__head,
+.table--compact .table__row {
+  grid-template-columns: 1.2fr 1fr 1fr;
+}
+
+.table__head {
+  font-size: 12px;
+  color: var(--muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table__row {
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 13px;
+}
+
+.table__mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
+
+.table__empty {
+  padding: 12px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.live__stub,
+.fin__stub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.fin__card {
+  padding: 12px;
+  text-align: left;
+}
+
+@media (max-width: 1100px) {
+  .crm {
+    grid-template-columns: 1fr;
+  }
+  .crm__sidebar {
+    position: relative;
+    top: 0;
+  }
+  .kpi__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ops__grid {
+    grid-template-columns: 1fr;
+  }
+  .kanban {
+    grid-template-columns: 1fr 1fr;
+  }
+  .table__head,
+  .table__row {
+    grid-template-columns: 1.2fr 1fr 1fr;
+  }
 }

@@ -1,0 +1,138 @@
+.clients {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clients__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.clients__h {
+  margin: 0;
+  font-size: 18px;
+}
+
+.clients__sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.clients__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.clients__search {
+  width: min(360px, 40vw);
+}
+
+.clients__grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 12px;
+}
+
+.clients__error {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.clients__tableWrap {
+  overflow: auto;
+}
+
+.clients__pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.clients__page {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.clients__details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clients__kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.clients__k {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.clients__v {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.clients__empty,
+.clients__emptySmall {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.clients__sectionTitle {
+  margin-top: 8px;
+  font-weight: 700;
+}
+
+.clients__detailActions {
+  display: flex;
+  gap: 8px;
+}
+
+.clients__form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.clients__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.clients__label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.clients__form textarea {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1100px) {
+  .clients__grid {
+    grid-template-columns: 1fr;
+  }
+  .clients__form {
+    grid-template-columns: 1fr;
+  }
+  .clients__search {
+    width: min(320px, 60vw);
+  }
+}
+

@@ -18,3 +18,14 @@ export function tryGetEmailFromJwt(token: string): string | null {
   }
 }
 
+export function tryGetRolesFromJwt(token: string): string[] {
+  const parts = token.split('.');
+  if (parts.length < 2) return [];
+  try {
+    const payloadJson = base64UrlToUtf8(parts[1] ?? '');
+    const payload = JSON.parse(payloadJson) as { roles?: unknown };
+    return Array.isArray(payload.roles) ? payload.roles.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
