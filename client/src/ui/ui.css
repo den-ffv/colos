@@ -131,6 +131,7 @@
   position: fixed;
   inset: 0;
   background: rgba(2, 6, 23, 0.45);
+  backdrop-filter: blur(2px);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -141,6 +142,12 @@
   width: min(720px, 100%);
   max-height: min(80vh, 820px);
   overflow: auto;
+  background: #0F1423;
+  }
+  
+  .ui-modal--lg {
+    width: min(960px, 100%);
+    max-height: min(88vh, 920px);
 }
 
 .ui-modal__head {
@@ -167,7 +174,7 @@
 }
 
 .ui-modal__body {
-  padding: 12px;
+  padding: 16px;
 }
 
 .ui-modal__footer {

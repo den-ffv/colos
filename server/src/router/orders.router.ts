@@ -1,0 +1,517 @@
+import express, { type Request, type Response } from 'express';
+import { prisma } from '../utils/prisma';
+import { requireAuth, type AuthenticatedRequest } from '../middleware/auth';
+import { authorize } from '../middleware/authorize';
+import { asyncHandler } from '../utils/asyncHandler';
+import { fail, ok, okList } from '../utils/http';
+import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
+import type { Prisma, OrderStatus, ExecutionType } from '@prisma/client';
+
+export const ordersRouter = express.Router();
+
+ordersRouter.use(requireAuth);
+
+/* ─── helpers ─────────────────────────────────────────── */
+
+function getCompanyId(req: Request) {
+  return (req as AuthenticatedRequest).auth.company_id;
+}
+
+function getUserId(req: Request) {
+  return (req as AuthenticatedRequest).auth.sub;
+}
+
+function normalizeText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const s = value.trim();
+  return s || null;
+}
+
+function toFloat(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toDatetime(v: unknown): Date | null {
+  if (!v) return null;
+  const d = new Date(v as string);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+const ORDER_STATUSES: OrderStatus[] = ['NEW', 'CONFIRMED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'];
+const EXECUTION_TYPES: ExecutionType[] = ['INTERNAL', 'EXTERNAL'];
+
+/** Allowed status transitions */
+const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  NEW: ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED: ['IN_TRANSIT', 'CANCELLED'],
+  IN_TRANSIT: ['DELIVERED', 'CANCELLED'],
+  DELIVERED: [],
+  CANCELLED: [],
+};
+
+function parseSort(sortBy: unknown) {
+  const v = typeof sortBy === 'string' ? sortBy : '';
+  const n = v.trim();
+  if (n === 'orderNumber' || n === 'order_number') return 'order_number';
+  if (n === 'status') return 'status';
+  if (n === 'pickupDate' || n === 'pickup_date') return 'pickup_date';
+  if (n === 'deliveryDate' || n === 'delivery_date') return 'delivery_date';
+  if (n === 'clientPrice' || n === 'client_price') return 'client_price';
+  if (n === 'createdAt' || n === 'created_at') return 'created_at';
+  if (n === 'updatedAt' || n === 'updated_at') return 'updated_at';
+  return 'created_at';
+}
+
+/** Generate sequential order number ORD-YYYYMMDD-XXXX */
+async function generateOrderNumber(companyId: string): Promise<string> {
+  const today = new Date();
+  const ds = today.toISOString().slice(0, 10).replace(/-/g, '');
+  const prefix = `ORD-${ds}-`;
+  const last = await prisma.order.findFirst({
+    where: { company_id: companyId, order_number: { startsWith: prefix } },
+    orderBy: { order_number: 'desc' },
+    select: { order_number: true },
+  });
+  let seq = 1;
+  if (last) {
+    const tail = last.order_number.replace(prefix, '');
+    const n = parseInt(tail, 10);
+    if (Number.isFinite(n)) seq = n + 1;
+  }
+  return `${prefix}${String(seq).padStart(4, '0')}`;
+}
+
+function computeFinancials(data: {
+  executionType: ExecutionType;
+  estimatedFuelCost?: number | null;
+  estimatedSalaryCost?: number | null;
+  carrierAgreedPrice?: number | null;
+  clientPrice: number;
+}) {
+  const internalCost = (data.estimatedFuelCost ?? 0) + (data.estimatedSalaryCost ?? 0);
+  const externalCost = data.carrierAgreedPrice ?? 0;
+  const totalCost = data.executionType === 'INTERNAL' ? internalCost : externalCost;
+  const margin = data.clientPrice - totalCost;
+  const marginPercent = data.clientPrice > 0 ? (margin / data.clientPrice) * 100 : 0;
+  return {
+    internal_cost: internalCost || null,
+    external_cost: externalCost || null,
+    total_cost: totalCost,
+    margin: Math.round(margin * 100) / 100,
+    margin_percent: Math.round(marginPercent * 100) / 100,
+  };
+}
+
+const orderSelect = {
+  id: true,
+  order_number: true,
+  client_id: true,
+  client: { select: { id: true, company_name: true, contact_person: true } },
+  product_type: true,
+  quantity: true,
+  unit: true,
+  weight: true,
+  volume: true,
+  pickup_address: true,
+  delivery_address: true,
+  pickup_date: true,
+  delivery_date: true,
+  status: true,
+  execution_type: true,
+  driver_id: true,
+  driver: { select: { id: true, first_name: true, last_name: true } },
+  vehicle_id: true,
+  vehicle: { select: { id: true, plate_number: true, type: true } },
+  estimated_fuel_cost: true,
+  estimated_salary_cost: true,
+  carrier_id: true,
+  carrier: { select: { id: true, company_name: true } },
+  carrier_agreed_price: true,
+  carrier_paid: true,
+  carrier_vehicle_info: true,
+  internal_cost: true,
+  external_cost: true,
+  total_cost: true,
+  client_price: true,
+  margin: true,
+  margin_percent: true,
+  client_paid: true,
+  assigned_manager_id: true,
+  assigned_manager: { select: { id: true, first_name: true, last_name: true, email: true } },
+  notes: true,
+  company_id: true,
+  created_at: true,
+  updated_at: true,
+} as const;
+
+type OrderRow = Prisma.OrderGetPayload<{ select: typeof orderSelect }>;
+
+function orderDto(o: OrderRow) {
+  return {
+    id: o.id,
+    orderNumber: o.order_number,
+    clientId: o.client_id,
+    client: o.client ? { id: o.client.id, companyName: o.client.company_name, contactPerson: o.client.contact_person } : null,
+    productType: o.product_type ?? undefined,
+    quantity: o.quantity ?? undefined,
+    unit: o.unit ?? undefined,
+    weight: o.weight ?? undefined,
+    volume: o.volume ?? undefined,
+    pickupAddress: o.pickup_address,
+    deliveryAddress: o.delivery_address,
+    pickupDate: o.pickup_date.toISOString(),
+    deliveryDate: o.delivery_date?.toISOString() ?? undefined,
+    status: o.status,
+    executionType: o.execution_type,
+    driverId: o.driver_id ?? undefined,
+    driver: o.driver ? { id: o.driver.id, name: `${o.driver.first_name} ${o.driver.last_name}` } : undefined,
+    vehicleId: o.vehicle_id ?? undefined,
+    vehicle: o.vehicle ? { id: o.vehicle.id, plateNumber: o.vehicle.plate_number, type: o.vehicle.type } : undefined,
+    estimatedFuelCost: o.estimated_fuel_cost ?? undefined,
+    estimatedSalaryCost: o.estimated_salary_cost ?? undefined,
+    carrierId: o.carrier_id ?? undefined,
+    carrier: o.carrier ? { id: o.carrier.id, companyName: o.carrier.company_name } : undefined,
+    carrierAgreedPrice: o.carrier_agreed_price ?? undefined,
+    carrierPaid: o.carrier_paid,
+    carrierVehicleInfo: o.carrier_vehicle_info ?? undefined,
+    internalCost: o.internal_cost ?? undefined,
+    externalCost: o.external_cost ?? undefined,
+    totalCost: o.total_cost,
+    clientPrice: o.client_price,
+    margin: o.margin,
+    marginPercent: o.margin_percent,
+    clientPaid: o.client_paid,
+    assignedManagerId: o.assigned_manager_id,
+    assignedManager: o.assigned_manager
+      ? {
+          id: o.assigned_manager.id,
+          name: `${o.assigned_manager.first_name} ${o.assigned_manager.last_name}`,
+          email: o.assigned_manager.email,
+        }
+      : undefined,
+    notes: o.notes ?? undefined,
+    createdAt: o.created_at.toISOString(),
+    updatedAt: o.updated_at.toISOString(),
+  };
+}
+
+function orderListDto(o: OrderRow) {
+  return {
+    id: o.id,
+    orderNumber: o.order_number,
+    clientName: o.client?.company_name ?? '—',
+    status: o.status,
+    executionType: o.execution_type,
+    pickupAddress: o.pickup_address,
+    deliveryAddress: o.delivery_address,
+    pickupDate: o.pickup_date.toISOString(),
+    deliveryDate: o.delivery_date?.toISOString() ?? undefined,
+    totalCost: o.total_cost,
+    clientPrice: o.client_price,
+    margin: o.margin,
+    marginPercent: o.margin_percent,
+    clientPaid: o.client_paid,
+    driverName: o.driver ? `${o.driver.first_name} ${o.driver.last_name}` : undefined,
+    carrierName: o.carrier?.company_name ?? undefined,
+    createdAt: o.created_at.toISOString(),
+    updatedAt: o.updated_at.toISOString(),
+  };
+}
+
+/* ─── GET /  – paginated list ─────────────────────────── */
+
+ordersRouter.get(
+  '/',
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const page = parsePage(req.query.page, 1);
+    const limit = parseLimit(req.query.limit, 20, 100);
+    const sortOrder = parseSortOrder(req.query.sortOrder);
+    const sortBy = parseSort(req.query.sortBy);
+    const q = normalizeText(req.query.q);
+    const status = normalizeText(req.query.status);
+    const executionType = normalizeText(req.query.executionType);
+
+    const where: Prisma.OrderWhereInput = { company_id: companyId };
+
+    if (status && ORDER_STATUSES.includes(status as OrderStatus)) {
+      where.status = status as OrderStatus;
+    }
+    if (executionType && EXECUTION_TYPES.includes(executionType as ExecutionType)) {
+      where.execution_type = executionType as ExecutionType;
+    }
+    if (q) {
+      where.OR = [
+        { order_number: { contains: q, mode: 'insensitive' } },
+        { pickup_address: { contains: q, mode: 'insensitive' } },
+        { delivery_address: { contains: q, mode: 'insensitive' } },
+        { client: { company_name: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, rows] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.findMany({
+        where,
+        orderBy: { [sortBy]: sortOrder } as Prisma.OrderOrderByWithRelationInput,
+        skip: (page - 1) * limit,
+        take: limit,
+        select: orderSelect,
+      }),
+    ]);
+
+    return okList(res, rows.map(orderListDto), {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
+  }),
+);
+
+/* ─── GET /lookups – drivers, vehicles, carriers, clients for dropdowns */
+
+ordersRouter.get(
+  '/lookups',
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const [clients, drivers, vehicles, carriers] = await Promise.all([
+      prisma.client.findMany({
+        where: { company_id: companyId },
+        orderBy: { company_name: 'asc' },
+        select: { id: true, company_name: true, contact_person: true },
+        take: 500,
+      }),
+      prisma.driver.findMany({
+        where: { company_id: companyId, is_available: true },
+        orderBy: { last_name: 'asc' },
+        select: { id: true, first_name: true, last_name: true },
+      }),
+      prisma.vehicle.findMany({
+        where: { company_id: companyId, is_available: true },
+        orderBy: { plate_number: 'asc' },
+        select: { id: true, plate_number: true, type: true, capacity: true },
+      }),
+      prisma.carrier.findMany({
+        where: { company_id: companyId, is_available: true },
+        orderBy: { company_name: 'asc' },
+        select: { id: true, company_name: true },
+      }),
+    ]);
+
+    return ok(res, {
+      clients: clients.map((c) => ({ id: c.id, companyName: c.company_name, contactPerson: c.contact_person })),
+      drivers: drivers.map((d) => ({ id: d.id, name: `${d.first_name} ${d.last_name}` })),
+      vehicles: vehicles.map((v) => ({ id: v.id, plateNumber: v.plate_number, type: v.type, capacity: v.capacity })),
+      carriers: carriers.map((c) => ({ id: c.id, companyName: c.company_name })),
+    });
+  }),
+);
+
+/* ─── GET /:id – single order ─────────────────────────── */
+
+ordersRouter.get(
+  '/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const row = await prisma.order.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      select: orderSelect,
+    });
+    if (!row) return fail(res, 404, 'Order not found');
+    return ok(res, orderDto(row));
+  }),
+);
+
+/* ─── POST / – create order ──────────────────────────── */
+
+ordersRouter.post(
+  '/',
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const userId = getUserId(req);
+    const body = (req.body as Record<string, unknown> | null) ?? {};
+
+    const clientId = normalizeText(body.clientId);
+    const pickupAddress = normalizeText(body.pickupAddress);
+    const deliveryAddress = normalizeText(body.deliveryAddress);
+    const pickupDate = toDatetime(body.pickupDate);
+    const executionType = normalizeText(body.executionType) as ExecutionType | null;
+    const clientPrice = toFloat(body.clientPrice);
+
+    if (!clientId || !pickupAddress || !deliveryAddress || !pickupDate || !executionType || clientPrice === null) {
+      return fail(res, 400, 'clientId, pickupAddress, deliveryAddress, pickupDate, executionType, clientPrice are required');
+    }
+    if (!EXECUTION_TYPES.includes(executionType)) {
+      return fail(res, 400, 'executionType must be INTERNAL or EXTERNAL');
+    }
+
+    // Verify client belongs to company
+    const client = await prisma.client.findFirst({ where: { id: clientId, company_id: companyId }, select: { id: true } });
+    if (!client) return fail(res, 400, 'Client not found');
+
+    const orderNumber = await generateOrderNumber(companyId);
+
+    const financials = computeFinancials({
+      executionType,
+      estimatedFuelCost: toFloat(body.estimatedFuelCost),
+      estimatedSalaryCost: toFloat(body.estimatedSalaryCost),
+      carrierAgreedPrice: toFloat(body.carrierAgreedPrice),
+      clientPrice,
+    });
+
+    const created = await prisma.order.create({
+      data: {
+        order_number: orderNumber,
+        client_id: clientId,
+        product_type: normalizeText(body.productType),
+        quantity: toFloat(body.quantity),
+        unit: normalizeText(body.unit),
+        weight: toFloat(body.weight),
+        volume: toFloat(body.volume),
+        pickup_address: pickupAddress,
+        delivery_address: deliveryAddress,
+        pickup_date: pickupDate,
+        delivery_date: toDatetime(body.deliveryDate),
+        execution_type: executionType,
+        driver_id: normalizeText(body.driverId) || null,
+        vehicle_id: normalizeText(body.vehicleId) || null,
+        estimated_fuel_cost: toFloat(body.estimatedFuelCost),
+        estimated_salary_cost: toFloat(body.estimatedSalaryCost),
+        carrier_id: normalizeText(body.carrierId) || null,
+        carrier_agreed_price: toFloat(body.carrierAgreedPrice),
+        carrier_vehicle_info: normalizeText(body.carrierVehicleInfo),
+        ...financials,
+        client_price: clientPrice,
+        assigned_manager_id: userId,
+        notes: normalizeText(body.notes),
+        company_id: companyId,
+      },
+      select: orderSelect,
+    });
+
+    return ok(res, orderDto(created), 201);
+  }),
+);
+
+/* ─── PUT /:id – update order ─────────────────────────── */
+
+ordersRouter.put(
+  '/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const body = (req.body as Record<string, unknown> | null) ?? {};
+
+    const existing = await prisma.order.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      select: { id: true, status: true, execution_type: true, client_price: true, estimated_fuel_cost: true, estimated_salary_cost: true, carrier_agreed_price: true },
+    });
+    if (!existing) return fail(res, 404, 'Order not found');
+
+    // Cannot edit delivered or cancelled orders (except notes)
+    if (existing.status === 'DELIVERED' || existing.status === 'CANCELLED') {
+      return fail(res, 400, 'Cannot edit a finished order');
+    }
+
+    const executionType = (normalizeText(body.executionType) as ExecutionType) || existing.execution_type;
+    const clientPrice = toFloat(body.clientPrice) ?? existing.client_price;
+
+    const financials = computeFinancials({
+      executionType,
+      estimatedFuelCost: toFloat(body.estimatedFuelCost) ?? existing.estimated_fuel_cost,
+      estimatedSalaryCost: toFloat(body.estimatedSalaryCost) ?? existing.estimated_salary_cost,
+      carrierAgreedPrice: toFloat(body.carrierAgreedPrice) ?? existing.carrier_agreed_price,
+      clientPrice,
+    });
+
+    const data: Prisma.OrderUpdateInput = {
+      ...(normalizeText(body.clientId) ? { client: { connect: { id: body.clientId as string } } } : {}),
+      ...(normalizeText(body.productType) !== undefined ? { product_type: normalizeText(body.productType) } : {}),
+      ...(body.quantity !== undefined ? { quantity: toFloat(body.quantity) } : {}),
+      ...(normalizeText(body.unit) !== undefined ? { unit: normalizeText(body.unit) } : {}),
+      ...(body.weight !== undefined ? { weight: toFloat(body.weight) } : {}),
+      ...(body.volume !== undefined ? { volume: toFloat(body.volume) } : {}),
+      ...(normalizeText(body.pickupAddress) ? { pickup_address: normalizeText(body.pickupAddress)! } : {}),
+      ...(normalizeText(body.deliveryAddress) ? { delivery_address: normalizeText(body.deliveryAddress)! } : {}),
+      ...(body.pickupDate !== undefined ? { pickup_date: toDatetime(body.pickupDate) ?? undefined } : {}),
+      ...(body.deliveryDate !== undefined ? { delivery_date: toDatetime(body.deliveryDate) } : {}),
+      execution_type: executionType,
+      ...(body.driverId !== undefined ? { driver_id: normalizeText(body.driverId) || null } : {}),
+      ...(body.vehicleId !== undefined ? { vehicle_id: normalizeText(body.vehicleId) || null } : {}),
+      ...(body.estimatedFuelCost !== undefined ? { estimated_fuel_cost: toFloat(body.estimatedFuelCost) } : {}),
+      ...(body.estimatedSalaryCost !== undefined ? { estimated_salary_cost: toFloat(body.estimatedSalaryCost) } : {}),
+      ...(body.carrierId !== undefined ? { carrier_id: normalizeText(body.carrierId) || null } : {}),
+      ...(body.carrierAgreedPrice !== undefined ? { carrier_agreed_price: toFloat(body.carrierAgreedPrice) } : {}),
+      ...(body.carrierVehicleInfo !== undefined ? { carrier_vehicle_info: normalizeText(body.carrierVehicleInfo) } : {}),
+      ...(body.clientPaid !== undefined ? { client_paid: !!body.clientPaid } : {}),
+      ...(body.carrierPaid !== undefined ? { carrier_paid: !!body.carrierPaid } : {}),
+      ...(normalizeText(body.notes) !== undefined ? { notes: body.notes === null ? null : normalizeText(body.notes) } : {}),
+      client_price: clientPrice,
+      ...financials,
+    };
+
+    const updated = await prisma.order.update({
+      where: { id: req.params.id },
+      data,
+      select: orderSelect,
+    });
+
+    return ok(res, orderDto(updated));
+  }),
+);
+
+/* ─── PATCH /:id/status – change status ──────────────── */
+
+ordersRouter.patch(
+  '/:id/status',
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const body = (req.body as Record<string, unknown> | null) ?? {};
+    const newStatus = normalizeText(body.status) as OrderStatus | null;
+
+    if (!newStatus || !ORDER_STATUSES.includes(newStatus)) {
+      return fail(res, 400, 'Invalid status');
+    }
+
+    const existing = await prisma.order.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      select: { id: true, status: true },
+    });
+    if (!existing) return fail(res, 404, 'Order not found');
+
+    const allowed = STATUS_TRANSITIONS[existing.status];
+    if (!allowed.includes(newStatus)) {
+      return fail(res, 400, `Cannot transition from ${existing.status} to ${newStatus}`);
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: req.params.id },
+      data: {
+        status: newStatus,
+        ...(newStatus === 'DELIVERED' ? { delivery_date: new Date() } : {}),
+      },
+      select: orderSelect,
+    });
+
+    return ok(res, orderDto(updated));
+  }),
+);
+
+/* ─── DELETE /:id – admin only ────────────────────────── */
+
+ordersRouter.delete(
+  '/:id',
+  authorize(['ADMIN']),
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const existing = await prisma.order.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      select: { id: true },
+    });
+    if (!existing) return fail(res, 404, 'Order not found');
+    await prisma.order.delete({ where: { id: req.params.id } });
+    return ok(res, { ok: true });
+  }),
+);

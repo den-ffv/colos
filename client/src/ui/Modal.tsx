@@ -6,12 +6,14 @@ export function Modal({
   children,
   footer,
   onClose,
+  size,
 }: {
   open: boolean
   title?: string
   children: React.ReactNode
   footer?: React.ReactNode
   onClose: () => void
+    size?: 'default' | 'lg'
 }) {
   useEffect(() => {
     if (!open) return
@@ -26,7 +28,7 @@ export function Modal({
 
   return (
     <div className="ui-modal__overlay" role="dialog" aria-modal="true" onMouseDown={onClose}>
-      <div className="ui-modal ui-card" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={`ui-modal ui-card${size === 'lg' ? ' ui-modal--lg' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
         {title ? (
           <div className="ui-modal__head">
             <div className="ui-modal__title">{title}</div>

@@ -4,6 +4,9 @@ import { tryGetEmailFromJwt } from './jwt';
 import { Dashboard } from './Dashboard';
 import { Button } from '../../ui/Button';
 import { ClientsPage } from '../clients/ClientsPage';
+import { OrdersPage } from '../orders/OrdersPage';
+import { DriversPage } from '../drivers/DriversPage';
+import { VehiclesPage } from '../vehicles/VehiclesPage';
 
 type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles';
 
@@ -79,11 +82,15 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
         <section>
           {view === 'dashboard' ? (
             <Dashboard tokens={tokens} onUnauthorized={onLogout} />
+          ) : view === 'orders' ? (
+            <OrdersPage tokens={tokens} onUnauthorized={onLogout} />
           ) : view === 'clients' ? (
             <ClientsPage tokens={tokens} onUnauthorized={onLogout} />
-          ) : (
-            <p>Сторінка `{title}` в розробці.</p>
-          )}
+          ) : view === 'drivers' ? (
+            <DriversPage tokens={tokens} onUnauthorized={onLogout} />
+          ) : view === 'vehicles' ? (
+            <VehiclesPage tokens={tokens} onUnauthorized={onLogout} />
+          ) : null}
         </section>
       </main>
     </div>
