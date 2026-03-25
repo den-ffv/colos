@@ -505,6 +505,45 @@
   text-align: left;
 }
 
+.fin__charts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.fin__card--stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fin__stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+  font-size: 13px;
+}
+
+.fin__statLabel {
+  color: var(--muted);
+}
+
+.fin__statValue {
+  font-weight: 700;
+}
+
+.fin__statValue--warn {
+  color: #ef4444;
+}
+
+@media (max-width: 1200px) {
+  .fin__charts {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1100px) {
   .crm {
     grid-template-columns: 1fr;

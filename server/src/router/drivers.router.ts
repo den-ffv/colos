@@ -2,6 +2,8 @@ import express, { type Request, type Response } from 'express';
 import { prisma } from '../utils/prisma';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
+import { validate } from '../middleware/validate';
+import { createDriverSchema, updateDriverSchema, availabilitySchema } from '../schemas';
 import { asyncHandler } from '../utils/asyncHandler';
 import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
@@ -191,6 +193,7 @@ driversRouter.get(
 
 driversRouter.post(
   '/',
+  validate(createDriverSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
@@ -225,6 +228,7 @@ driversRouter.post(
 
 driversRouter.put(
   '/:id',
+  validate(updateDriverSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
@@ -262,6 +266,7 @@ driversRouter.put(
 
 driversRouter.patch(
   '/:id/availability',
+  validate(availabilitySchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};

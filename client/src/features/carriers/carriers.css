@@ -1,0 +1,166 @@
+.carriers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.carriers__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.carriers__h {
+  margin: 0;
+  font-size: 18px;
+}
+
+.carriers__sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.carriers__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.carriers__search {
+  width: min(360px, 40vw);
+}
+
+.carriers__grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 12px;
+}
+
+.carriers__error {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.carriers__tableWrap {
+  overflow: auto;
+}
+
+.carriers__pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.carriers__page {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.carriers__details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.carriers__kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.carriers__k {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.carriers__v {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.carriers__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.carriers__stars {
+  color: #f59e0b;
+  font-size: 13px;
+}
+
+.carriers__empty,
+.carriers__emptySmall {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.carriers__sectionTitle {
+  margin-top: 8px;
+  font-weight: 700;
+}
+
+.carriers__detailActions {
+  display: flex;
+  gap: 8px;
+}
+
+.carriers__form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.carriers__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.carriers__field--full {
+  grid-column: 1 / -1;
+}
+
+.carriers__label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.carriers__checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.carriers__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.carriers__form textarea {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1100px) {
+  .carriers__grid {
+    grid-template-columns: 1fr;
+  }
+  .carriers__form {
+    grid-template-columns: 1fr;
+  }
+  .carriers__search {
+    width: min(320px, 60vw);
+  }
+}

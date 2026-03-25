@@ -4,6 +4,8 @@ import { randomUUID } from 'crypto';
 import { prisma } from '../utils/prisma';
 import { signAccessToken, signRefreshToken } from '../utils/jwt';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth';
+import { validate } from '../middleware/validate';
+import { signInSchema, signUpSchema } from '../schemas';
 import { fail, ok } from '../utils/http';
 
 export const authRouter = express.Router();
@@ -31,7 +33,7 @@ function ensureString(value: unknown): string | null {
   return s ? s : null;
 }
 
-authRouter.post('/signin', async (req: Request, res: Response) => {
+authRouter.post('/signin', validate(signInSchema), async (req: Request, res: Response) => {
   try {
     const email = normalizeEmail((req.body as Record<string, unknown> | null)?.email);
     const password = ensureString((req.body as Record<string, unknown> | null)?.password);
@@ -86,7 +88,7 @@ authRouter.post('/signin', async (req: Request, res: Response) => {
   }
 });
 
-authRouter.post('/signup', async (req: Request, res: Response) => {
+authRouter.post('/signup', validate(signUpSchema), async (req: Request, res: Response) => {
   try {
     const body = (req.body as Record<string, unknown> | null) ?? {};
     const email = normalizeEmail(body.email);

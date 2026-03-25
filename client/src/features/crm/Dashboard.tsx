@@ -4,6 +4,9 @@ import { apiGetJson, type ApiError } from '../../lib/api';
 import { tryGetRolesFromJwt } from './jwt';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
+} from 'recharts';
 
 type Period = 'today' | 'week' | 'custom';
 
@@ -39,6 +42,19 @@ type DashboardSummary = {
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; message: string; details?: unknown };
 
+type DashboardStats = {
+  totalOrders: number;
+  ordersToday: number;
+  ordersThisWeek: number;
+  ordersThisMonth: number;
+  ordersByStatus: { new: number; confirmed: number; inTransit: number; delivered: number; cancelled: number };
+  ordersByExecutionType: { internal: number; external: number };
+  revenue: { today: number; thisWeek: number; thisMonth: number };
+  margin: { total: number; average: number };
+  unpaidOrders: number;
+  unpaidAmount: number;
+};
+
 function formatDelta(delta: number, suffix = '') {
   if (!Number.isFinite(delta) || delta === 0) return `0${suffix}`;
   const sign = delta > 0 ? '+' : '';
@@ -66,6 +82,7 @@ export function Dashboard({
   const [customTo, setCustomTo] = useState('');
 
   const [data, setData] = useState<DashboardSummary | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,13 +104,21 @@ export function Dashboard({
     setIsLoading(true);
     setError(null);
     try {
-      const res = await apiGetJson<ApiResponse<DashboardSummary>>(`/api/dashboard/summary?${query}`, {
-        headers: { Authorization: `Bearer ${tokens.accessToken}` },
-      });
-      if (res && typeof res === 'object' && 'success' in res && (res as { success: unknown }).success === true) {
-        setData((res as ApiResponse<DashboardSummary>).data);
+      const [summaryRes, statsRes] = await Promise.all([
+        apiGetJson<ApiResponse<DashboardSummary>>(`/api/dashboard/summary?${query}`, {
+          headers: { Authorization: `Bearer ${tokens.accessToken}` },
+        }),
+        apiGetJson<ApiResponse<DashboardStats>>('/api/dashboard/stats', {
+          headers: { Authorization: `Bearer ${tokens.accessToken}` },
+        }),
+      ]);
+      if (summaryRes && typeof summaryRes === 'object' && 'success' in summaryRes && (summaryRes as { success: unknown }).success === true) {
+        setData((summaryRes as ApiResponse<DashboardSummary>).data);
       } else {
-        setData(res as unknown as DashboardSummary);
+        setData(summaryRes as unknown as DashboardSummary);
+      }
+      if (statsRes && typeof statsRes === 'object' && 'success' in statsRes && (statsRes as { success: unknown }).success === true) {
+        setStats((statsRes as ApiResponse<DashboardStats>).data);
       }
     } catch (err) {
       const apiErr = err as Partial<ApiError>;
@@ -314,12 +339,106 @@ export function Dashboard({
       </section>
 
       <section className="fin">
-        <div className="ui-card fin__card">
-          <div className="fin__title">Аналітика та фінанси</div>
-          <div className="fin__stub">
-            {showFinance ? 'Графіки (revenue/margin/top clients) додамо наступним кроком.' : 'Блок приховано вашою роллю.'}
+        {showFinance && stats ? (
+          <div className="fin__charts">
+            <div className="ui-card fin__card">
+              <div className="fin__title">Замовлення за статусом</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={[
+                  { name: 'New', value: stats.ordersByStatus.new },
+                  { name: 'Confirmed', value: stats.ordersByStatus.confirmed },
+                  { name: 'In Transit', value: stats.ordersByStatus.inTransit },
+                  { name: 'Delivered', value: stats.ordersByStatus.delivered },
+                  { name: 'Cancelled', value: stats.ordersByStatus.cancelled },
+                ]} margin={{ top: 4, right: 8, left: -16, bottom: 4 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {['#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ef4444'].map((color, i) => (
+                      <Cell key={i} fill={color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="ui-card fin__card">
+              <div className="fin__title">Тип виконання</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Internal', value: stats.ordersByExecutionType.internal },
+                      { name: 'External', value: stats.ordersByExecutionType.external },
+                    ]}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={55}
+                    outerRadius={80}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    <Cell fill="#6366f1" />
+                    <Cell fill="#10b981" />
+                  </Pie>
+                  <Tooltip />
+                  <Legend iconType="circle" iconSize={10} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="ui-card fin__card">
+              <div className="fin__title">Виручка (UAH)</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={[
+                  { name: 'Сьогодні', value: stats.revenue.today },
+                  { name: 'Тиждень', value: stats.revenue.thisWeek },
+                  { name: 'Місяць', value: stats.revenue.thisMonth },
+                ]} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: number) => `${v.toLocaleString()} ₴`} />
+                  <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="ui-card fin__card fin__card--stats">
+              <div className="fin__title">Фінансовий підсумок</div>
+              <div className="fin__stat">
+                <span className="fin__statLabel">Загальна маржа</span>
+                <span className="fin__statValue">{stats.margin.total.toLocaleString()} ₴</span>
+              </div>
+              <div className="fin__stat">
+                <span className="fin__statLabel">Середня маржа/замовл.</span>
+                <span className="fin__statValue">{stats.margin.average.toFixed(0)} ₴</span>
+              </div>
+              <div className="fin__stat">
+                <span className="fin__statLabel">Несплачених замовлень</span>
+                <span className="fin__statValue fin__statValue--warn">{stats.unpaidOrders}</span>
+              </div>
+              <div className="fin__stat">
+                <span className="fin__statLabel">Несплачена сума</span>
+                <span className="fin__statValue fin__statValue--warn">{stats.unpaidAmount.toLocaleString()} ₴</span>
+              </div>
+              <div className="fin__stat">
+                <span className="fin__statLabel">Всього замовлень</span>
+                <span className="fin__statValue">{stats.totalOrders}</span>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : showFinance && !stats ? (
+          <div className="ui-card fin__card">
+            <div className="fin__title">Аналітика та фінанси</div>
+            <div className="fin__stub">{isLoading ? 'Завантаження…' : 'Дані недоступні'}</div>
+          </div>
+        ) : (
+          <div className="ui-card fin__card">
+            <div className="fin__title">Аналітика та фінанси</div>
+            <div className="fin__stub">Блок приховано вашою роллю.</div>
+          </div>
+        )}
       </section>
     </div>
   );

@@ -7,8 +7,9 @@ import { ClientsPage } from '../clients/ClientsPage';
 import { OrdersPage } from '../orders/OrdersPage';
 import { DriversPage } from '../drivers/DriversPage';
 import { VehiclesPage } from '../vehicles/VehiclesPage';
+import { CarriersPage } from '../carriers/CarriersPage';
 
-type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles';
+type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers';
 
 export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: () => void }) {
   const [view, setView] = useState<CrmView>('dashboard');
@@ -23,7 +24,9 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
           ? 'Clients'
           : view === 'drivers'
             ? 'Drivers'
-            : 'Vehicles';
+            : view === 'carriers'
+              ? 'Carriers'
+              : 'Vehicles';
 
   return (
     <div className="crm">
@@ -65,6 +68,13 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
           >
             Vehicles
           </button>
+          <button
+            type="button"
+            className={view === 'carriers' ? 'crm__navBtn crm__navBtn--active' : 'crm__navBtn'}
+            onClick={() => setView('carriers')}
+          >
+            Carriers
+          </button>
         </nav>
       </aside>
 
@@ -90,6 +100,8 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
             <DriversPage tokens={tokens} onUnauthorized={onLogout} />
           ) : view === 'vehicles' ? (
             <VehiclesPage tokens={tokens} onUnauthorized={onLogout} />
+          ) : view === 'carriers' ? (
+            <CarriersPage tokens={tokens} onUnauthorized={onLogout} />
           ) : null}
         </section>
       </main>

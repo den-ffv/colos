@@ -58,6 +58,14 @@ export async function apiPutJson<TResponse>(
   return requestJson<TResponse>(path, { ...init, method: 'PUT', body });
 }
 
+export async function apiPatchJson<TResponse>(
+  path: string,
+  body: unknown,
+  init?: Omit<RequestInit, 'method' | 'body'>,
+): Promise<TResponse> {
+  return requestJson<TResponse>(path, { ...init, method: 'PATCH', body });
+}
+
 export async function apiDeleteJson<TResponse>(
   path: string,
   init?: Omit<RequestInit, 'method' | 'body'>,

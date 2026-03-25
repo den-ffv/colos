@@ -2,6 +2,8 @@ import express, { type Request, type Response } from 'express';
 import { prisma } from '../utils/prisma';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
+import { validate } from '../middleware/validate';
+import { createOrderSchema, updateOrderSchema, updateOrderStatusSchema } from '../schemas';
 import { asyncHandler } from '../utils/asyncHandler';
 import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
@@ -329,6 +331,7 @@ ordersRouter.get(
 
 ordersRouter.post(
   '/',
+  validate(createOrderSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const userId = getUserId(req);
@@ -400,6 +403,7 @@ ordersRouter.post(
 
 ordersRouter.put(
   '/:id',
+  validate(updateOrderSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
@@ -466,6 +470,7 @@ ordersRouter.put(
 
 ordersRouter.patch(
   '/:id/status',
+  validate(updateOrderStatusSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
