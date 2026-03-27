@@ -4,7 +4,7 @@ import { apiDeleteJson, apiGetJson, apiPostJson, apiPutJson, type ApiError } fro
 import type { ApiListResponse, ApiResponse } from '../../lib/apiResponse'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
-import { Modal } from '../../ui/Modal'
+import { Drawer } from '../../ui/Drawer'
 import { tryGetRolesFromJwt } from '../crm/jwt'
 import './vehicles.css'
 
@@ -370,51 +370,96 @@ export function VehiclesPage({
         </Card>
       </div>
 
-      <Modal
+      <Drawer
         open={editOpen}
         title={editMode === 'create' ? 'Новий транспортний засіб' : 'Редагування ТЗ'}
+        subtitle={editMode === 'create' ? 'Додайте транспортний засіб до флоту' : `Редагування — ${form.plateNumber}`}
         onClose={() => setEditOpen(false)}
-        footer={<>
-          <Button variant="ghost" onClick={() => setEditOpen(false)} disabled={formSubmitting}>Скасувати</Button>
-          <Button variant="primary" onClick={() => void submitForm()} disabled={formSubmitting}>
-            {formSubmitting ? 'Збереження…' : 'Зберегти'}
-          </Button>
-        </>}
+        footer={
+          <>
+            <button type="button" className="drawer-btn drawer-btn--ghost" onClick={() => setEditOpen(false)} disabled={formSubmitting}>
+              Скасувати
+            </button>
+            <button type="button" className="drawer-btn drawer-btn--primary" onClick={() => void submitForm()} disabled={formSubmitting}>
+              {formSubmitting ? 'Збереження…' : editMode === 'create' ? 'Додати ТЗ' : 'Зберегти зміни'}
+            </button>
+          </>
+        }
       >
-        {formError && <div className="vehicles__error">{formError}</div>}
-        <div className="vehicles__form">
-          <label className="vehicles__field">
-            <span className="vehicles__label">Номерний знак *</span>
-            <input className="ui-input" value={form.plateNumber} onChange={(e) => setForm((s) => ({ ...s, plateNumber: e.target.value }))} />
+        <div className="drawer-form">
+          {formError && <div className="drawer-form__error">{formError}</div>}
+
+          <div className="drawer-form__section">Ідентифікація</div>
+
+          <label className="drawer-form__field">
+            <span className="drawer-form__label drawer-form__label--required">Номерний знак</span>
+            <input
+              className="drawer-form__input"
+              placeholder="AA 0000 AA"
+              value={form.plateNumber}
+              onChange={(e) => setForm((s) => ({ ...s, plateNumber: e.target.value }))}
+            />
           </label>
-          <label className="vehicles__field">
-            <span className="vehicles__label">Тип *</span>
-            <select className="ui-input" value={form.type}
-              onChange={(e) => setForm((s) => ({ ...s, type: e.target.value as VehicleType }))}>
-              {(Object.keys(VEHICLE_TYPE_LABELS) as VehicleType[]).map((t) => (
-                <option key={t} value={t}>{VEHICLE_TYPE_LABELS[t]}</option>
-              ))}
-            </select>
-          </label>
-          <label className="vehicles__field">
-            <span className="vehicles__label">Вантажопідйомність (т) *</span>
-            <input className="ui-input" type="number" step="0.1" value={form.capacity}
-              onChange={(e) => setForm((s) => ({ ...s, capacity: e.target.value }))} />
-          </label>
-          <label className="vehicles__field">
-            <span className="vehicles__label">Доступний</span>
-            <select className="ui-input" value={form.isAvailable ? 'true' : 'false'}
-              onChange={(e) => setForm((s) => ({ ...s, isAvailable: e.target.value === 'true' }))}>
-              <option value="true">Так</option>
-              <option value="false">Ні</option>
-            </select>
-          </label>
-          <label className="vehicles__field vehicles__field--full">
-            <span className="vehicles__label">Нотатки</span>
-            <textarea className="ui-input" rows={3} value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} />
+
+          <div className="drawer-form__row">
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Тип</span>
+              <select
+                className="drawer-form__input"
+                value={form.type}
+                onChange={(e) => setForm((s) => ({ ...s, type: e.target.value as VehicleType }))}
+              >
+                {(Object.keys(VEHICLE_TYPE_LABELS) as VehicleType[]).map((t) => (
+                  <option key={t} value={t}>{VEHICLE_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+            </label>
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Вантажопідйомність (т)</span>
+              <input
+                className="drawer-form__input"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="20"
+                value={form.capacity}
+                onChange={(e) => setForm((s) => ({ ...s, capacity: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className="drawer-form__section">Статус</div>
+
+          <div className="drawer-form__toggle">
+            <div className="drawer-form__toggleLabel">
+              <span className="drawer-form__toggleTitle">Доступний для призначення</span>
+              <span className="drawer-form__toggleHint">ТЗ може отримувати нові замовлення</span>
+            </div>
+            <label className="drawer-form__switch">
+              <input
+                type="checkbox"
+                checked={form.isAvailable}
+                onChange={(e) => setForm((s) => ({ ...s, isAvailable: e.target.checked }))}
+              />
+              <span className="drawer-form__switchTrack" />
+            </label>
+          </div>
+
+          <div className="drawer-form__section">Додатково</div>
+
+          <label className="drawer-form__field">
+            <span className="drawer-form__label">Нотатки</span>
+            <textarea
+              className="drawer-form__input"
+              rows={3}
+              placeholder="Будь-які додаткові відомості…"
+              value={form.notes}
+              onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
+              style={{ resize: 'vertical' }}
+            />
           </label>
         </div>
-      </Modal>
+      </Drawer>
     </div>
   )
 }

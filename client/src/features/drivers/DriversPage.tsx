@@ -4,7 +4,7 @@ import { apiDeleteJson, apiGetJson, apiPostJson, apiPutJson, type ApiError } fro
 import type { ApiListResponse, ApiResponse } from '../../lib/apiResponse'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
-import { Modal } from '../../ui/Modal'
+import { Drawer } from '../../ui/Drawer'
 import { tryGetRolesFromJwt } from '../crm/jwt'
 import './drivers.css'
 
@@ -357,49 +357,102 @@ export function DriversPage({
         </Card>
       </div>
 
-      <Modal
+      <Drawer
         open={editOpen}
         title={editMode === 'create' ? 'Новий водій' : 'Редагування водія'}
+        subtitle={editMode === 'create' ? 'Заповніть інформацію про водія' : `${form.firstName} ${form.lastName}`}
         onClose={() => setEditOpen(false)}
-        footer={<>
-          <Button variant="ghost" onClick={() => setEditOpen(false)} disabled={formSubmitting}>Скасувати</Button>
-          <Button variant="primary" onClick={() => void submitForm()} disabled={formSubmitting}>
-            {formSubmitting ? 'Збереження…' : 'Зберегти'}
-          </Button>
-        </>}
+        footer={
+          <>
+            <button type="button" className="drawer-btn drawer-btn--ghost" onClick={() => setEditOpen(false)} disabled={formSubmitting}>
+              Скасувати
+            </button>
+            <button type="button" className="drawer-btn drawer-btn--primary" onClick={() => void submitForm()} disabled={formSubmitting}>
+              {formSubmitting ? 'Збереження…' : editMode === 'create' ? 'Додати водія' : 'Зберегти зміни'}
+            </button>
+          </>
+        }
       >
-        {formError && <div className="drivers__error">{formError}</div>}
-        <div className="drivers__form">
-          <label className="drivers__field">
-            <span className="drivers__label">Прізвище *</span>
-            <input className="ui-input" value={form.lastName} onChange={(e) => setForm((s) => ({ ...s, lastName: e.target.value }))} />
+        <div className="drawer-form">
+          {formError && <div className="drawer-form__error">{formError}</div>}
+
+          <div className="drawer-form__section">Особисті дані</div>
+
+          <div className="drawer-form__row">
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Прізвище</span>
+              <input
+                className="drawer-form__input"
+                placeholder="Шевченко"
+                value={form.lastName}
+                onChange={(e) => setForm((s) => ({ ...s, lastName: e.target.value }))}
+              />
+            </label>
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Імʼя</span>
+              <input
+                className="drawer-form__input"
+                placeholder="Тарас"
+                value={form.firstName}
+                onChange={(e) => setForm((s) => ({ ...s, firstName: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <label className="drawer-form__field">
+            <span className="drawer-form__label drawer-form__label--required">Телефон</span>
+            <input
+              className="drawer-form__input"
+              placeholder="+380 XX XXX XX XX"
+              value={form.phone}
+              onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))}
+            />
           </label>
-          <label className="drivers__field">
-            <span className="drivers__label">Імʼя *</span>
-            <input className="ui-input" value={form.firstName} onChange={(e) => setForm((s) => ({ ...s, firstName: e.target.value }))} />
+
+          <div className="drawer-form__section">Документи</div>
+
+          <label className="drawer-form__field">
+            <span className="drawer-form__label drawer-form__label--required">Номер ліцензії</span>
+            <input
+              className="drawer-form__input"
+              placeholder="ААА 000000"
+              value={form.licenseNumber}
+              onChange={(e) => setForm((s) => ({ ...s, licenseNumber: e.target.value }))}
+            />
           </label>
-          <label className="drivers__field">
-            <span className="drivers__label">Телефон *</span>
-            <input className="ui-input" value={form.phone} onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))} />
-          </label>
-          <label className="drivers__field">
-            <span className="drivers__label">Номер ліцензії *</span>
-            <input className="ui-input" value={form.licenseNumber} onChange={(e) => setForm((s) => ({ ...s, licenseNumber: e.target.value }))} />
-          </label>
-          <label className="drivers__field">
-            <span className="drivers__label">Доступний</span>
-            <select className="ui-input" value={form.isAvailable ? 'true' : 'false'}
-              onChange={(e) => setForm((s) => ({ ...s, isAvailable: e.target.value === 'true' }))}>
-              <option value="true">Так</option>
-              <option value="false">Ні</option>
-            </select>
-          </label>
-          <label className="drivers__field drivers__field--full">
-            <span className="drivers__label">Нотатки</span>
-            <textarea className="ui-input" rows={3} value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} />
+
+          <div className="drawer-form__section">Статус</div>
+
+          <div className="drawer-form__toggle">
+            <div className="drawer-form__toggleLabel">
+              <span className="drawer-form__toggleTitle">Доступний для призначення</span>
+              <span className="drawer-form__toggleHint">Водій може отримувати нові замовлення</span>
+            </div>
+            <label className="drawer-form__switch">
+              <input
+                type="checkbox"
+                checked={form.isAvailable}
+                onChange={(e) => setForm((s) => ({ ...s, isAvailable: e.target.checked }))}
+              />
+              <span className="drawer-form__switchTrack" />
+            </label>
+          </div>
+
+          <div className="drawer-form__section">Додатково</div>
+
+          <label className="drawer-form__field">
+            <span className="drawer-form__label">Нотатки</span>
+            <textarea
+              className="drawer-form__input"
+              rows={3}
+              placeholder="Будь-які додаткові відомості…"
+              value={form.notes}
+              onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
+              style={{ resize: 'vertical' }}
+            />
           </label>
         </div>
-      </Modal>
+      </Drawer>
     </div>
   )
 }
