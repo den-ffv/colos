@@ -7,6 +7,8 @@ import { createOrderSchema, updateOrderSchema, updateOrderStatusSchema } from '.
 import { asyncHandler } from '../utils/asyncHandler';
 import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
+import { emitOrderStatusChanged, emitOrderUpdated } from '../services/socket';
+import { generateOrderPdf } from '../services/pdf.service';
 import type { Prisma, OrderStatus, ExecutionType } from '@prisma/client';
 
 export const ordersRouter = express.Router();
@@ -395,6 +397,8 @@ ordersRouter.post(
       select: orderSelect,
     });
 
+    emitOrderUpdated(companyId, { orderId: created.id, orderNumber: created.order_number, action: 'created' });
+
     return ok(res, orderDto(created), 201);
   }),
 );
@@ -500,6 +504,13 @@ ordersRouter.patch(
       select: orderSelect,
     });
 
+    emitOrderStatusChanged(companyId, {
+      orderId: updated.id,
+      orderNumber: updated.order_number,
+      newStatus,
+      previousStatus: existing.status,
+    });
+
     return ok(res, orderDto(updated));
   }),
 );
@@ -513,10 +524,38 @@ ordersRouter.delete(
     const companyId = getCompanyId(req);
     const existing = await prisma.order.findFirst({
       where: { id: req.params.id, company_id: companyId },
-      select: { id: true },
+      select: { id: true, order_number: true },
     });
     if (!existing) return fail(res, 404, 'Order not found');
     await prisma.order.delete({ where: { id: req.params.id } });
+    emitOrderUpdated(companyId, { orderId: req.params.id, orderNumber: existing.order_number, action: 'deleted' });
     return ok(res, { ok: true });
+  }),
+);
+
+/* ─── GET /:id/pdf – generate waybill PDF ─────────────── */
+
+ordersRouter.get(
+  '/:id/pdf',
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      include: {
+        client: true,
+        driver: true,
+        vehicle: true,
+        carrier: true,
+        assigned_manager: { select: { first_name: true, last_name: true, email: true } },
+      },
+    });
+    if (!order) return fail(res, 404, 'Order not found');
+
+    const pdfBytes = await generateOrderPdf(order);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${order.order_number}.pdf"`);
+    res.setHeader('Content-Length', pdfBytes.length);
+    res.end(Buffer.from(pdfBytes));
   }),
 );

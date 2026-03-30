@@ -9,6 +9,8 @@ import { Badge } from '../../ui/Badge'
 import { tryGetRolesFromJwt } from '../crm/jwt'
 import { RouteMap } from './RouteMap'
 import { AddressAutocomplete, type AddressSelection } from './AddressAutocomplete'
+import { connectSocket, disconnectSocket, type OrderStatusChangedPayload, type OrderUpdatedPayload } from '../../lib/socket'
+import { getApiBaseUrl } from '../../lib/env'
 import './orders.css'
 
 /* ─── types ───────────────────────────────────────────── */
@@ -303,6 +305,64 @@ export function OrdersPage({
   useEffect(() => {
     void loadList()
   }, [loadList])
+
+  /* ─── socket real-time ───────── */
+
+  useEffect(() => {
+    const socket = connectSocket(tokens.accessToken)
+
+    const onStatusChanged = (payload: OrderStatusChangedPayload) => {
+      // Update status in list without full reload
+      setData((prev) =>
+        prev.map((o) =>
+          o.id === payload.orderId ? { ...o, status: payload.newStatus as OrderListItem['status'] } : o,
+        ),
+      )
+      // Refresh details panel if it's the same order
+      setDetails((prev) =>
+        prev && prev.id === payload.orderId ? { ...prev, status: payload.newStatus as OrderListItem['status'] } : prev,
+      )
+    }
+
+    const onOrderUpdated = (payload: OrderUpdatedPayload) => {
+      if (payload.action === 'deleted') {
+        setData((prev) => prev.filter((o) => o.id !== payload.orderId))
+        setSelectedId((prev) => (prev === payload.orderId ? null : prev))
+      } else if (payload.action === 'created') {
+        void loadList()
+      }
+    }
+
+    socket.on('order:statusChanged', onStatusChanged)
+    socket.on('order:updated', onOrderUpdated)
+
+    return () => {
+      socket.off('order:statusChanged', onStatusChanged)
+      socket.off('order:updated', onOrderUpdated)
+      disconnectSocket()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokens.accessToken])
+
+  /* ─── PDF download ───────────── */
+
+  async function downloadPdf(orderId: string, orderNumber: string) {
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/orders/${orderId}/pdf`, {
+        headers: authHeaders,
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${orderNumber}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      /* silently ignore */
+    }
+  }
 
   async function openDetails(id: string) {
     setSelectedId(id)
@@ -634,6 +694,11 @@ export function OrdersPage({
                 <Button size="sm" variant="secondary" onClick={() => void openEdit()} disabled={!details || detailsLoading || isFinished}>
                   Редагувати
                 </Button>
+                {details && (
+                  <Button size="sm" variant="ghost" onClick={() => void downloadPdf(details.id, details.orderNumber)}>
+                    PDF
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" onClick={() => void deleteOrder()} disabled={!canDelete || detailsLoading}>
                   Видалити
                 </Button>
