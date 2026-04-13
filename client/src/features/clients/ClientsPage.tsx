@@ -4,7 +4,7 @@ import { apiDeleteJson, apiGetJson, apiPostJson, apiPutJson, type ApiError } fro
 import type { ApiListResponse, ApiResponse } from '../../lib/apiResponse'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
-import { Modal } from '../../ui/Modal'
+import { Drawer } from '../../ui/Drawer'
 import { tryGetRolesFromJwt } from '../crm/jwt'
 import './clients.css'
 
@@ -93,7 +93,32 @@ export function ClientsPage({
     notes: '',
   })
   const [formError, setFormError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formSubmitting, setFormSubmitting] = useState(false)
+
+  const PHONE_RE = /^[+\d][\d\s\-()\[\]]{4,18}[\d)]?$/
+
+  function validateClientForm(f: typeof form): Record<string, string> {
+    const errors: Record<string, string> = {}
+    if (!f.companyName.trim()) errors.companyName = 'Обовʼязкове поле'
+    else if (f.companyName.trim().length < 2) errors.companyName = 'Мінімум 2 символи'
+    else if (f.companyName.trim().length > 200) errors.companyName = 'Максимум 200 символів'
+
+    if (!f.contactPerson.trim()) errors.contactPerson = 'Обовʼязкове поле'
+    else if (f.contactPerson.trim().length < 2) errors.contactPerson = 'Мінімум 2 символи'
+    else if (f.contactPerson.trim().length > 200) errors.contactPerson = 'Максимум 200 символів'
+
+    if (!f.phone.trim()) errors.phone = 'Обовʼязкове поле'
+    else if (!PHONE_RE.test(f.phone.trim())) errors.phone = 'Невірний формат (напр. +380671234567)'
+
+    if (f.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim()))
+      errors.email = 'Невірний email'
+
+    if (f.address.trim().length > 500) errors.address = 'Максимум 500 символів'
+    if (f.notes.trim().length > 1000) errors.notes = 'Максимум 1000 символів'
+
+    return errors
+  }
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
@@ -163,6 +188,7 @@ export function ClientsPage({
     setEditMode('create')
     setForm({ companyName: '', contactPerson: '', phone: '', email: '', address: '', notes: '' })
     setFormError(null)
+    setFieldErrors({})
     setEditOpen(true)
   }
 
@@ -178,10 +204,17 @@ export function ClientsPage({
       notes: details.notes ?? '',
     })
     setFormError(null)
+    setFieldErrors({})
     setEditOpen(true)
   }
 
   async function submitForm() {
+    const errors = validateClientForm(form)
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
+      return
+    }
+    setFieldErrors({})
     setFormError(null)
     setFormSubmitting(true)
     try {
@@ -192,11 +225,6 @@ export function ClientsPage({
         email: emptyToNull(form.email),
         address: emptyToNull(form.address),
         notes: emptyToNull(form.notes),
-      }
-
-      if (!payload.companyName || !payload.contactPerson || !payload.phone) {
-        setFormError('companyName, contactPerson, phone обовʼязкові')
-        return
       }
 
       if (editMode === 'create') {
@@ -404,7 +432,7 @@ export function ClientsPage({
         </Card>
       </div>
 
-      <Modal
+      <Drawer
         open={editOpen}
         title={editMode === 'create' ? 'New client' : 'Edit client'}
         onClose={() => setEditOpen(false)}
@@ -422,24 +450,29 @@ export function ClientsPage({
         {formError ? <div className="clients__error">{formError}</div> : null}
         <div className="clients__form">
           <label className="clients__field">
-            <span className="clients__label">Company</span>
+            <span className="clients__label">Company *</span>
             <input className="ui-input" value={form.companyName} onChange={(e) => setForm((s) => ({ ...s, companyName: e.target.value }))} />
+            {fieldErrors.companyName && <span className="clients__fieldError">{fieldErrors.companyName}</span>}
           </label>
           <label className="clients__field">
-            <span className="clients__label">Contact</span>
+            <span className="clients__label">Contact *</span>
             <input className="ui-input" value={form.contactPerson} onChange={(e) => setForm((s) => ({ ...s, contactPerson: e.target.value }))} />
+            {fieldErrors.contactPerson && <span className="clients__fieldError">{fieldErrors.contactPerson}</span>}
           </label>
           <label className="clients__field">
-            <span className="clients__label">Phone</span>
+            <span className="clients__label">Phone *</span>
             <input className="ui-input" value={form.phone} onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))} />
+            {fieldErrors.phone && <span className="clients__fieldError">{fieldErrors.phone}</span>}
           </label>
           <label className="clients__field">
             <span className="clients__label">Email</span>
             <input className="ui-input" value={form.email} onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))} />
+            {fieldErrors.email && <span className="clients__fieldError">{fieldErrors.email}</span>}
           </label>
           <label className="clients__field">
             <span className="clients__label">Address</span>
             <input className="ui-input" value={form.address} onChange={(e) => setForm((s) => ({ ...s, address: e.target.value }))} />
+            {fieldErrors.address && <span className="clients__fieldError">{fieldErrors.address}</span>}
           </label>
           <label className="clients__field">
             <span className="clients__label">Notes</span>
@@ -449,9 +482,10 @@ export function ClientsPage({
               value={form.notes}
               onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
             />
+            {fieldErrors.notes && <span className="clients__fieldError">{fieldErrors.notes}</span>}
           </label>
         </div>
-      </Modal>
+      </Drawer>
     </div>
   )
 }

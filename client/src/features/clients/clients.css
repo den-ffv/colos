@@ -120,6 +120,12 @@
   color: var(--muted);
 }
 
+.clients__fieldError {
+  font-size: 11px;
+  color: #ef4444;
+  margin-top: -2px;
+}
+
 .clients__form textarea {
   grid-column: 1 / -1;
 }

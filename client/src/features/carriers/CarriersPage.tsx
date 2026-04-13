@@ -4,7 +4,7 @@ import { apiDeleteJson, apiGetJson, apiPatchJson, apiPostJson, apiPutJson, type 
 import type { ApiListResponse, ApiResponse } from '../../lib/apiResponse'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
-import { Modal } from '../../ui/Modal'
+import { Drawer } from '../../ui/Drawer'
 import { Badge } from '../../ui/Badge'
 import { tryGetRolesFromJwt } from '../crm/jwt'
 import './carriers.css'
@@ -103,7 +103,42 @@ export function CarriersPage({ tokens, onUnauthorized }: { tokens: AuthTokens; o
     notes: '',
   })
   const [formError, setFormError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formSubmitting, setFormSubmitting] = useState(false)
+
+  const PHONE_RE = /^[+\d][\d\s\-()\[\]]{4,18}[\d)]?$/
+
+  function validateCarrierForm(f: typeof form): Record<string, string> {
+    const errors: Record<string, string> = {}
+    if (!f.companyName.trim()) errors.companyName = 'Обовʼязкове поле'
+    else if (f.companyName.trim().length < 2) errors.companyName = 'Мінімум 2 символи'
+    else if (f.companyName.trim().length > 200) errors.companyName = 'Максимум 200 символів'
+
+    if (!f.contactPerson.trim()) errors.contactPerson = 'Обовʼязкове поле'
+    else if (f.contactPerson.trim().length < 2) errors.contactPerson = 'Мінімум 2 символи'
+    else if (f.contactPerson.trim().length > 200) errors.contactPerson = 'Максимум 200 символів'
+
+    if (!f.phone.trim()) errors.phone = 'Обовʼязкове поле'
+    else if (!PHONE_RE.test(f.phone.trim())) errors.phone = 'Невірний формат (напр. +380671234567)'
+
+    if (f.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim()))
+      errors.email = 'Невірний email'
+
+    if (!f.maxCapacity.trim()) errors.maxCapacity = 'Обовʼязкове поле'
+    else {
+      const cap = Number(f.maxCapacity)
+      if (!Number.isFinite(cap) || cap <= 0) errors.maxCapacity = 'Повинна бути > 0'
+      else if (cap > 999) errors.maxCapacity = 'Максимум 999 т'
+    }
+
+    const rat = Number(f.rating)
+    if (f.rating && (!Number.isFinite(rat) || rat < 0 || rat > 5))
+      errors.rating = 'Від 0 до 5'
+
+    if (f.notes.trim().length > 1000) errors.notes = 'Максимум 1000 символів'
+
+    return errors
+  }
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
@@ -171,6 +206,7 @@ export function CarriersPage({ tokens, onUnauthorized }: { tokens: AuthTokens; o
     setEditMode('create')
     setForm({ companyName: '', contactPerson: '', phone: '', email: '', vehicleTypes: [], maxCapacity: '', coverageAreas: '', rating: '5', notes: '' })
     setFormError(null)
+    setFieldErrors({})
     setEditOpen(true)
   }
 
@@ -189,6 +225,7 @@ export function CarriersPage({ tokens, onUnauthorized }: { tokens: AuthTokens; o
       notes: details.notes ?? '',
     })
     setFormError(null)
+    setFieldErrors({})
     setEditOpen(true)
   }
 
@@ -200,6 +237,12 @@ export function CarriersPage({ tokens, onUnauthorized }: { tokens: AuthTokens; o
   }
 
   async function submitForm() {
+    const errors = validateCarrierForm(form)
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
+      return
+    }
+    setFieldErrors({})
     setFormError(null)
     setFormSubmitting(true)
     try {
@@ -216,11 +259,6 @@ export function CarriersPage({ tokens, onUnauthorized }: { tokens: AuthTokens; o
           .filter(Boolean),
         rating: Math.min(5, Math.max(0, Number(form.rating) || 5)),
         notes: emptyToNull(form.notes),
-      }
-
-      if (!payload.companyName || !payload.contactPerson || !payload.phone || !Number.isFinite(payload.maxCapacity)) {
-        setFormError('companyName, contactPerson, phone, maxCapacity обовʼязкові')
-        return
       }
 
       if (editMode === 'create') {
@@ -479,7 +517,7 @@ export function CarriersPage({ tokens, onUnauthorized }: { tokens: AuthTokens; o
         </Card>
       </div>
 
-      <Modal
+      <Drawer
         open={editOpen}
         title={editMode === 'create' ? 'New carrier' : 'Edit carrier'}
         onClose={() => setEditOpen(false)}
@@ -499,26 +537,32 @@ export function CarriersPage({ tokens, onUnauthorized }: { tokens: AuthTokens; o
           <label className="carriers__field">
             <span className="carriers__label">Company *</span>
             <input className="ui-input" value={form.companyName} onChange={(e) => setForm((s) => ({ ...s, companyName: e.target.value }))} />
+            {fieldErrors.companyName && <span className="carriers__fieldError">{fieldErrors.companyName}</span>}
           </label>
           <label className="carriers__field">
             <span className="carriers__label">Contact *</span>
             <input className="ui-input" value={form.contactPerson} onChange={(e) => setForm((s) => ({ ...s, contactPerson: e.target.value }))} />
+            {fieldErrors.contactPerson && <span className="carriers__fieldError">{fieldErrors.contactPerson}</span>}
           </label>
           <label className="carriers__field">
             <span className="carriers__label">Phone *</span>
             <input className="ui-input" value={form.phone} onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))} />
+            {fieldErrors.phone && <span className="carriers__fieldError">{fieldErrors.phone}</span>}
           </label>
           <label className="carriers__field">
             <span className="carriers__label">Email</span>
             <input className="ui-input" value={form.email} onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))} />
+            {fieldErrors.email && <span className="carriers__fieldError">{fieldErrors.email}</span>}
           </label>
           <label className="carriers__field">
             <span className="carriers__label">Max capacity (т) *</span>
-            <input className="ui-input" type="number" min="0" value={form.maxCapacity} onChange={(e) => setForm((s) => ({ ...s, maxCapacity: e.target.value }))} />
+            <input className="ui-input" type="number" min="0" max="999" value={form.maxCapacity} onChange={(e) => setForm((s) => ({ ...s, maxCapacity: e.target.value }))} />
+            {fieldErrors.maxCapacity && <span className="carriers__fieldError">{fieldErrors.maxCapacity}</span>}
           </label>
           <label className="carriers__field">
             <span className="carriers__label">Rating (0–5)</span>
             <input className="ui-input" type="number" min="0" max="5" step="0.1" value={form.rating} onChange={(e) => setForm((s) => ({ ...s, rating: e.target.value }))} />
+            {fieldErrors.rating && <span className="carriers__fieldError">{fieldErrors.rating}</span>}
           </label>
           <div className="carriers__field carriers__field--full">
             <span className="carriers__label">Vehicle types</span>
@@ -532,15 +576,16 @@ export function CarriersPage({ tokens, onUnauthorized }: { tokens: AuthTokens; o
             </div>
           </div>
           <label className="carriers__field carriers__field--full">
-            <span className="carriers__label">Coverage areas (comma separated)</span>
+            <span className="carriers__label">Coverage areas (через кому)</span>
             <input className="ui-input" value={form.coverageAreas} onChange={(e) => setForm((s) => ({ ...s, coverageAreas: e.target.value }))} placeholder="Київ-Львів, Одеса-Харків" />
           </label>
           <label className="carriers__field carriers__field--full">
             <span className="carriers__label">Notes</span>
             <textarea className="ui-input" rows={3} value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} />
+            {fieldErrors.notes && <span className="carriers__fieldError">{fieldErrors.notes}</span>}
           </label>
         </div>
-      </Modal>
+      </Drawer>
     </div>
   )
 }

@@ -6,6 +6,12 @@ const vehicleTypeEnum = z.enum(['TRUCK', 'VAN', 'CAR', 'REFRIGERATOR']);
 const orderStatusEnum = z.enum(['NEW', 'CONFIRMED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED']);
 const executionTypeEnum = z.enum(['INTERNAL', 'EXTERNAL']);
 
+/** E.g. +380 67 123-45-67, (067) 123-45-67, +1-800-555-0100 */
+const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^[+\d][\d\s\-()\[\]]{4,18}[\d)]?$/, 'Невірний формат телефону (напр. +380671234567)');
+
 /* ─── auth ─────────────────────────────────────────────── */
 
 export const signInSchema = z.object({
@@ -27,12 +33,30 @@ export const signUpSchema = z.object({
 /* ─── clients ──────────────────────────────────────────── */
 
 export const createClientSchema = z.object({
-  companyName: z.string().min(1, 'Company name is required'),
-  contactPerson: z.string().min(1, 'Contact person is required'),
-  phone: z.string().min(1, 'Phone is required'),
-  email: z.string().email('Invalid email').nullable().optional(),
-  address: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
+  companyName: z
+    .string()
+    .trim()
+    .min(2, 'Мінімум 2 символи')
+    .max(200, 'Максимум 200 символів'),
+  contactPerson: z
+    .string()
+    .trim()
+    .min(2, 'Мінімум 2 символи')
+    .max(200, 'Максимум 200 символів'),
+  phone: phoneSchema,
+  email: z.string().trim().email('Невірний email').nullable().optional(),
+  address: z
+    .string()
+    .trim()
+    .max(500, 'Максимум 500 символів')
+    .nullable()
+    .optional(),
+  notes: z
+    .string()
+    .trim()
+    .max(1000, 'Максимум 1000 символів')
+    .nullable()
+    .optional(),
 });
 
 export const updateClientSchema = createClientSchema.partial();
@@ -93,53 +117,80 @@ export const updateVehicleSchema = z.object({
 /* ─── carriers ─────────────────────────────────────────── */
 
 export const createCarrierSchema = z.object({
-  companyName: z.string().min(1, 'Company name is required').optional(),
-  company_name: z.string().min(1).optional(),
-  contactPerson: z.string().min(1, 'Contact person is required').optional(),
-  contact_person: z.string().min(1).optional(),
-  phone: z.string().min(1, 'Phone is required'),
-  email: z.string().email().nullable().optional(),
+  companyName: z
+    .string()
+    .trim()
+    .min(2, 'Мінімум 2 символи')
+    .max(200, 'Максимум 200 символів'),
+  contactPerson: z
+    .string()
+    .trim()
+    .min(2, 'Мінімум 2 символи')
+    .max(200, 'Максимум 200 символів'),
+  phone: phoneSchema,
+  email: z.string().trim().email('Невірний email').nullable().optional(),
   vehicleTypes: z.array(vehicleTypeEnum).optional(),
-  maxCapacity: z.number().positive('Max capacity must be positive').optional(),
-  max_capacity: z.number().positive().optional(),
-  coverageAreas: z.array(z.string()).optional(),
+  maxCapacity: z
+    .number({ required_error: 'Вантажопідйомність обовʼязкова' })
+    .positive('Повинна бути > 0')
+    .max(999, 'Максимум 999 т'),
+  coverageAreas: z
+    .array(z.string().trim().max(100, 'Макс. 100 символів'))
+    .optional(),
   rating: z.number().min(0).max(5).optional(),
   isAvailable: z.boolean().optional(),
-  notes: z.string().nullable().optional(),
-}).refine(
-  (d) => (d.companyName || d.company_name) && (d.contactPerson || d.contact_person) && (d.maxCapacity !== undefined || d.max_capacity !== undefined),
-  { message: 'companyName, contactPerson, maxCapacity are required' },
-);
+  notes: z
+    .string()
+    .trim()
+    .max(1000, 'Максимум 1000 символів')
+    .nullable()
+    .optional(),
+});
 
 export const updateCarrierSchema = z.object({
-  companyName: z.string().min(1).optional(),
-  company_name: z.string().min(1).optional(),
-  contactPerson: z.string().min(1).optional(),
-  contact_person: z.string().min(1).optional(),
-  phone: z.string().min(1).optional(),
-  email: z.string().email().nullable().optional(),
+  companyName: z.string().trim().min(2).max(200).optional(),
+  company_name: z.string().trim().min(2).optional(),
+  contactPerson: z.string().trim().min(2).max(200).optional(),
+  contact_person: z.string().trim().min(2).optional(),
+  phone: phoneSchema.optional(),
+  email: z.string().trim().email().nullable().optional(),
   vehicleTypes: z.array(vehicleTypeEnum).optional(),
-  maxCapacity: z.number().positive().optional(),
+  maxCapacity: z.number().positive().max(999).optional(),
   max_capacity: z.number().positive().optional(),
-  coverageAreas: z.array(z.string()).optional(),
+  coverageAreas: z.array(z.string().trim().max(100)).optional(),
   rating: z.number().min(0).max(5).optional(),
   isAvailable: z.boolean().optional(),
-  notes: z.string().nullable().optional(),
+  notes: z.string().trim().max(1000).nullable().optional(),
 });
 
 /* ─── orders ───────────────────────────────────────────── */
 
-export const createOrderSchema = z.object({
-  clientId: z.string().uuid('clientId must be a valid UUID'),
-  productType: z.string().nullable().optional(),
-  quantity: z.number().positive().nullable().optional(),
-  unit: z.string().nullable().optional(),
-  weight: z.number().positive().nullable().optional(),
-  volume: z.number().positive().nullable().optional(),
-  pickupAddress: z.string().min(1, 'pickupAddress is required'),
-  deliveryAddress: z.string().min(1, 'deliveryAddress is required'),
-  pickupDate: z.string().min(1, 'pickupDate is required'),
-  deliveryDate: z.string().nullable().optional(),
+const orderBaseSchema = z.object({
+  clientId: z.string().uuid('Оберіть клієнта'),
+  productType: z.string().trim().max(200).nullable().optional(),
+  quantity: z.number().positive('Повинна бути > 0').nullable().optional(),
+  unit: z.string().trim().max(50).nullable().optional(),
+  weight: z.number().positive('Повинна бути > 0').nullable().optional(),
+  volume: z.number().positive('Повинна бути > 0').nullable().optional(),
+  pickupAddress: z
+    .string()
+    .trim()
+    .min(5, 'Мінімум 5 символів')
+    .max(500, 'Максимум 500 символів'),
+  deliveryAddress: z
+    .string()
+    .trim()
+    .min(5, 'Мінімум 5 символів')
+    .max(500, 'Максимум 500 символів'),
+  pickupDate: z
+    .string()
+    .min(1, 'Вкажіть дату забору')
+    .refine((v) => !Number.isNaN(Date.parse(v)), 'Невірний формат дати'),
+  deliveryDate: z
+    .string()
+    .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Невірний формат дати')
+    .nullable()
+    .optional(),
   executionType: executionTypeEnum,
   driverId: z.string().uuid().nullable().optional(),
   vehicleId: z.string().uuid().nullable().optional(),
@@ -147,12 +198,26 @@ export const createOrderSchema = z.object({
   estimatedSalaryCost: z.number().nonnegative().nullable().optional(),
   carrierId: z.string().uuid().nullable().optional(),
   carrierAgreedPrice: z.number().nonnegative().nullable().optional(),
-  carrierVehicleInfo: z.string().nullable().optional(),
-  clientPrice: z.number().nonnegative('clientPrice must be non-negative'),
-  notes: z.string().nullable().optional(),
+  carrierVehicleInfo: z.string().trim().max(200).nullable().optional(),
+  clientPrice: z.number().nonnegative('Не може бути від\'ємним'),
+  notes: z.string().trim().max(1000).nullable().optional(),
 });
 
-export const updateOrderSchema = createOrderSchema.partial();
+export const createOrderSchema = orderBaseSchema.superRefine((data, ctx) => {
+  if (data.deliveryDate && data.pickupDate) {
+    const pickup = Date.parse(data.pickupDate);
+    const delivery = Date.parse(data.deliveryDate);
+    if (!Number.isNaN(pickup) && !Number.isNaN(delivery) && delivery < pickup) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['deliveryDate'],
+        message: 'Дата доставки не може бути раніше дати забору',
+      });
+    }
+  }
+});
+
+export const updateOrderSchema = orderBaseSchema.partial();
 
 export const updateOrderStatusSchema = z.object({
   status: orderStatusEnum,

@@ -46,8 +46,8 @@
 
 .drivers__search:focus {
   outline: none;
-  border-color: #a78bfa;
-  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.15);
+  border-color: #266EF3;
+  box-shadow: 0 0 0 3px rgba(38, 110, 243, 0.15);
 }
 
 .drivers__filterSelect {

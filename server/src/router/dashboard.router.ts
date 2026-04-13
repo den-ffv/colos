@@ -3,6 +3,10 @@ import { prisma } from '../utils/prisma';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth';
 import type { OrderStatus } from '@prisma/client';
 import { ok } from '../utils/http';
+import { cacheGet, cacheSet } from '../utils/redis';
+
+const SUMMARY_TTL = 60;  // 60 секунд
+const STATS_TTL   = 120; // 2 хвилини
 
 export const dashboardRouter = express.Router();
 
@@ -100,12 +104,20 @@ dashboardRouter.get('/summary', requireAuth, async (req, res: Response) => {
   const period = (preset === 'today' || preset === 'week' || preset === 'custom' ? preset : 'today') as PeriodPreset;
   const from = parseDate(req.query.from);
   const to = parseDate(req.query.to);
+  const companyId = (req as AuthenticatedRequest).auth.company_id;
+
+  // ─── Cache lookup ──────────────────────────────────────
+  const cacheKey = period === 'custom' && from && to
+    ? `colos:dashboard:summary:${companyId}:${period}:${from.toISOString()}:${to.toISOString()}`
+    : `colos:dashboard:summary:${companyId}:${period}`;
+
+  const cached = await cacheGet<DashboardSummary>(cacheKey);
+  if (cached) return ok(res, cached);
+  // ───────────────────────────────────────────────────────
 
   const range = buildRange(now, period, from, to);
   const prev = previousRange(range.from, range.to);
   const prevEndMs = prev.to.getTime();
-
-  const companyId = (req as AuthenticatedRequest).auth.company_id;
 
   const activeStatuses: OrderStatus[] = ['NEW', 'CONFIRMED', 'IN_TRANSIT'];
 
@@ -246,6 +258,7 @@ dashboardRouter.get('/summary', requireAuth, async (req, res: Response) => {
     incidents,
   };
 
+  await cacheSet(cacheKey, summary, SUMMARY_TTL);
   return ok(res, summary);
 });
 
@@ -253,6 +266,12 @@ dashboardRouter.get('/stats', requireAuth, async (req, res: Response) => {
   const now = new Date();
   const auth = (req as AuthenticatedRequest).auth;
   const companyId = auth.company_id;
+
+  // ─── Cache lookup ──────────────────────────────────────
+  const statsCacheKey = `colos:dashboard:stats:${companyId}`;
+  const cachedStats = await cacheGet<Record<string, unknown>>(statsCacheKey);
+  if (cachedStats) return ok(res, cachedStats);
+  // ───────────────────────────────────────────────────────
 
   const fromToday = startOfDay(now);
   const fromWeek = startOfWeekMonday(now);
@@ -355,5 +374,6 @@ dashboardRouter.get('/stats', requireAuth, async (req, res: Response) => {
     response.carriers = { total, available, averageRating: avgRating._avg.rating ?? 0 };
   }
 
+  await cacheSet(statsCacheKey, response, STATS_TTL);
   return ok(res, response);
 });

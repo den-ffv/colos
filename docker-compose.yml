@@ -13,11 +13,21 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    container_name: colos-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+
   server:
     build: ./server
     container_name: colos-server
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/colos?schema=public
+      REDIS_URL: redis://redis:6379
       CLIENT_ORIGIN: http://localhost:5173
       PORT: 4000
       JWT_ACCESS_SECRET: dev_access_secret_change_me
@@ -26,6 +36,7 @@ services:
       JWT_REFRESH_EXPIRES_IN: 30d
     depends_on:
       - db
+      - redis
     ports:
       - "4000:4000"
 
@@ -44,3 +55,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:

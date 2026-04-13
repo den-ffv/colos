@@ -4,7 +4,7 @@ import { apiDeleteJson, apiGetJson, apiPostJson, apiPutJson, type ApiError } fro
 import type { ApiListResponse, ApiResponse } from '../../lib/apiResponse'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
-import { Modal } from '../../ui/Modal'
+import { Drawer } from '../../ui/Drawer'
 import { Badge } from '../../ui/Badge'
 import { tryGetRolesFromJwt } from '../crm/jwt'
 import { RouteMap } from './RouteMap'
@@ -219,7 +219,51 @@ export function OrdersPage({
   const [editMode, setEditMode] = useState<'create' | 'edit'>('create')
   const [form, setForm] = useState<OrderForm>({ ...EMPTY_FORM })
   const [formError, setFormError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formSubmitting, setFormSubmitting] = useState(false)
+
+  function validateOrderForm(f: OrderForm): Record<string, string> {
+    const errors: Record<string, string> = {}
+
+    if (!f.clientId) errors.clientId = 'Оберіть клієнта'
+
+    if (!f.pickupAddress.trim()) errors.pickupAddress = 'Обовʼязкове поле'
+    else if (f.pickupAddress.trim().length < 5) errors.pickupAddress = 'Мінімум 5 символів'
+    else if (f.pickupAddress.trim().length > 500) errors.pickupAddress = 'Максимум 500 символів'
+
+    if (!f.deliveryAddress.trim()) errors.deliveryAddress = 'Обовʼязкове поле'
+    else if (f.deliveryAddress.trim().length < 5) errors.deliveryAddress = 'Мінімум 5 символів'
+    else if (f.deliveryAddress.trim().length > 500) errors.deliveryAddress = 'Максимум 500 символів'
+
+    if (!f.pickupDate) errors.pickupDate = 'Вкажіть дату забору'
+    else if (Number.isNaN(Date.parse(f.pickupDate))) errors.pickupDate = 'Невірний формат дати'
+
+    if (f.deliveryDate) {
+      if (Number.isNaN(Date.parse(f.deliveryDate))) errors.deliveryDate = 'Невірний формат дати'
+      else if (f.pickupDate && !Number.isNaN(Date.parse(f.pickupDate)) && Date.parse(f.deliveryDate) < Date.parse(f.pickupDate))
+        errors.deliveryDate = 'Не може бути раніше дати забору'
+    }
+
+    if (f.clientPrice === '') errors.clientPrice = 'Обовʼязкове поле'
+    else if (Number.isNaN(Number(f.clientPrice)) || Number(f.clientPrice) < 0)
+      errors.clientPrice = 'Повинна бути ≥ 0'
+
+    if (f.quantity && (Number.isNaN(Number(f.quantity)) || Number(f.quantity) <= 0))
+      errors.quantity = 'Повинна бути > 0'
+    if (f.weight && (Number.isNaN(Number(f.weight)) || Number(f.weight) <= 0))
+      errors.weight = 'Повинна бути > 0'
+    if (f.volume && (Number.isNaN(Number(f.volume)) || Number(f.volume) <= 0))
+      errors.volume = 'Повинна бути > 0'
+
+    if (f.estimatedFuelCost && (Number.isNaN(Number(f.estimatedFuelCost)) || Number(f.estimatedFuelCost) < 0))
+      errors.estimatedFuelCost = 'Не може бути відʼємним'
+    if (f.estimatedSalaryCost && (Number.isNaN(Number(f.estimatedSalaryCost)) || Number(f.estimatedSalaryCost) < 0))
+      errors.estimatedSalaryCost = 'Не може бути відʼємним'
+    if (f.carrierAgreedPrice && (Number.isNaN(Number(f.carrierAgreedPrice)) || Number(f.carrierAgreedPrice) < 0))
+      errors.carrierAgreedPrice = 'Не може бути відʼємним'
+
+    return errors
+  }
 
   /* ─── distance calculation ───── */
   type Coords = [number, number]
@@ -431,6 +475,7 @@ export function OrdersPage({
     setEditMode('create')
     setForm({ ...EMPTY_FORM })
     setFormError(null)
+    setFieldErrors({})
     setPickupCoords(null)
     setDeliveryCoords(null)
     setDistanceKm(null)
@@ -444,6 +489,8 @@ export function OrdersPage({
     setPickupCoords(null)
     setDeliveryCoords(null)
     setDistanceKm(null)
+    setFormError(null)
+    setFieldErrors({})
     setForm({
       clientId: details.clientId,
       executionType: details.executionType,
@@ -472,6 +519,12 @@ export function OrdersPage({
   }
 
   async function submitForm() {
+    const errors = validateOrderForm(form)
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
+      return
+    }
+    setFieldErrors({})
     setFormError(null)
     setFormSubmitting(true)
     try {
@@ -507,11 +560,6 @@ export function OrdersPage({
         payload.vehicleId = null
         payload.estimatedFuelCost = null
         payload.estimatedSalaryCost = null
-      }
-
-      if (!payload.clientId || !payload.pickupAddress || !payload.deliveryAddress || !payload.pickupDate || payload.clientPrice === null) {
-        setFormError('Клієнт, адреси, дата забору та ціна обовʼязкові')
-        return
       }
 
       if (editMode === 'create') {
@@ -810,11 +858,11 @@ export function OrdersPage({
       </div>
 
       {/* ── create/edit modal ── */}
-      <Modal
+      <Drawer
         open={editOpen}
         title={editMode === 'create' ? 'Нове замовлення' : 'Редагування замовлення'}
         onClose={() => setEditOpen(false)}
-        size="lg"
+        width={700}
         footer={
           <>
             <Button variant="ghost" onClick={() => setEditOpen(false)} disabled={formSubmitting}>
@@ -840,6 +888,7 @@ export function OrdersPage({
                 <option key={c.id} value={c.id}>{c.companyName} ({c.contactPerson})</option>
               ))}
             </select>
+            {fieldErrors.clientId && <span className="orders__fieldError">{fieldErrors.clientId}</span>}
           </label>
 
           <label className="orders__field">
@@ -861,6 +910,7 @@ export function OrdersPage({
               onSelect={handlePickupSelect}
               placeholder="Почніть вводити адресу…"
             />
+            {fieldErrors.pickupAddress && <span className="orders__fieldError">{fieldErrors.pickupAddress}</span>}
           </div>
           <div className="orders__field">
             <span className="orders__label">Адреса доставки (Б) *</span>
@@ -870,6 +920,7 @@ export function OrdersPage({
               onSelect={handleDeliverySelect}
               placeholder="Почніть вводити адресу…"
             />
+            {fieldErrors.deliveryAddress && <span className="orders__fieldError">{fieldErrors.deliveryAddress}</span>}
           </div>
 
           {/* distance banner */}
@@ -893,10 +944,12 @@ export function OrdersPage({
           <label className="orders__field">
             <span className="orders__label">Дата забору *</span>
             <input className="ui-input" type="datetime-local" value={form.pickupDate} onChange={(e) => updateField('pickupDate', e.target.value)} />
+            {fieldErrors.pickupDate && <span className="orders__fieldError">{fieldErrors.pickupDate}</span>}
           </label>
           <label className="orders__field">
             <span className="orders__label">Дата доставки</span>
             <input className="ui-input" type="datetime-local" value={form.deliveryDate} onChange={(e) => updateField('deliveryDate', e.target.value)} />
+            {fieldErrors.deliveryDate && <span className="orders__fieldError">{fieldErrors.deliveryDate}</span>}
           </label>
 
           {/* ── section: cargo ── */}
@@ -908,7 +961,8 @@ export function OrdersPage({
           </label>
           <label className="orders__field">
             <span className="orders__label">Кількість</span>
-            <input className="ui-input" type="number" step="any" value={form.quantity} onChange={(e) => updateField('quantity', e.target.value)} />
+            <input className="ui-input" type="number" step="any" min="0" value={form.quantity} onChange={(e) => updateField('quantity', e.target.value)} />
+            {fieldErrors.quantity && <span className="orders__fieldError">{fieldErrors.quantity}</span>}
           </label>
           <label className="orders__field">
             <span className="orders__label">Одиниця</span>
@@ -916,11 +970,13 @@ export function OrdersPage({
           </label>
           <label className="orders__field">
             <span className="orders__label">Вага (т)</span>
-            <input className="ui-input" type="number" step="any" value={form.weight} onChange={(e) => updateField('weight', e.target.value)} />
+            <input className="ui-input" type="number" step="any" min="0" value={form.weight} onChange={(e) => updateField('weight', e.target.value)} />
+            {fieldErrors.weight && <span className="orders__fieldError">{fieldErrors.weight}</span>}
           </label>
           <label className="orders__field">
             <span className="orders__label">Обʼєм (м³)</span>
-            <input className="ui-input" type="number" step="any" value={form.volume} onChange={(e) => updateField('volume', e.target.value)} />
+            <input className="ui-input" type="number" step="any" min="0" value={form.volume} onChange={(e) => updateField('volume', e.target.value)} />
+            {fieldErrors.volume && <span className="orders__fieldError">{fieldErrors.volume}</span>}
           </label>
 
           {/* ── section: finance ── */}
@@ -928,7 +984,8 @@ export function OrdersPage({
 
           <label className="orders__field">
             <span className="orders__label">Ціна клієнту (₴) *</span>
-            <input className="ui-input" type="number" step="0.01" value={form.clientPrice} onChange={(e) => updateField('clientPrice', e.target.value)} />
+            <input className="ui-input" type="number" step="0.01" min="0" value={form.clientPrice} onChange={(e) => updateField('clientPrice', e.target.value)} />
+            {fieldErrors.clientPrice && <span className="orders__fieldError">{fieldErrors.clientPrice}</span>}
           </label>
 
           {/* ── section: resources ── */}
@@ -958,11 +1015,13 @@ export function OrdersPage({
               </label>
               <label className="orders__field">
                 <span className="orders__label">Пальне (оцінка, ₴)</span>
-                <input className="ui-input" type="number" step="0.01" value={form.estimatedFuelCost} onChange={(e) => updateField('estimatedFuelCost', e.target.value)} />
+                <input className="ui-input" type="number" step="0.01" min="0" value={form.estimatedFuelCost} onChange={(e) => updateField('estimatedFuelCost', e.target.value)} />
+                {fieldErrors.estimatedFuelCost && <span className="orders__fieldError">{fieldErrors.estimatedFuelCost}</span>}
               </label>
               <label className="orders__field">
                 <span className="orders__label">Зарплата (₴)</span>
-                <input className="ui-input" type="number" step="0.01" value={form.estimatedSalaryCost} onChange={(e) => updateField('estimatedSalaryCost', e.target.value)} />
+                <input className="ui-input" type="number" step="0.01" min="0" value={form.estimatedSalaryCost} onChange={(e) => updateField('estimatedSalaryCost', e.target.value)} />
+                {fieldErrors.estimatedSalaryCost && <span className="orders__fieldError">{fieldErrors.estimatedSalaryCost}</span>}
               </label>
             </>
           )}
@@ -980,7 +1039,8 @@ export function OrdersPage({
               </label>
               <label className="orders__field">
                 <span className="orders__label">Ціна перевізника (₴)</span>
-                <input className="ui-input" type="number" step="0.01" value={form.carrierAgreedPrice} onChange={(e) => updateField('carrierAgreedPrice', e.target.value)} />
+                <input className="ui-input" type="number" step="0.01" min="0" value={form.carrierAgreedPrice} onChange={(e) => updateField('carrierAgreedPrice', e.target.value)} />
+                {fieldErrors.carrierAgreedPrice && <span className="orders__fieldError">{fieldErrors.carrierAgreedPrice}</span>}
               </label>
               <label className="orders__field orders__field--full">
                 <span className="orders__label">Інфо про транспорт перевізника</span>
@@ -997,7 +1057,7 @@ export function OrdersPage({
             <textarea className="ui-input" rows={3} value={form.notes} onChange={(e) => updateField('notes', e.target.value)} />
           </label>
         </div>
-      </Modal>
+      </Drawer>
     </div>
   )
 }
