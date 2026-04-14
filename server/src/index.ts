@@ -4,6 +4,7 @@ import { prisma } from './utils/prisma';
 import { env } from './config/env';
 import { initSocketServer } from './services/socket';
 import { disconnectRedis } from './utils/redis';
+import { startMarketDataScheduler } from './services/market-data.service';
 
 /* ─── HTTP Server + Socket.io ───────────────────────────── */
 
@@ -28,4 +29,5 @@ httpServer.listen(env.PORT, () => {
   console.log(`🔒 Helmet + Rate Limiting активні`);
   console.log(`⚡ Socket.io готовий до підключень`);
   console.log(`🗄️  Redis кешування підключено`);
+  startMarketDataScheduler();
 });
