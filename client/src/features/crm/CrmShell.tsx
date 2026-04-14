@@ -21,8 +21,9 @@ import { DriversPage } from '../drivers/DriversPage';
 import { VehiclesPage } from '../vehicles/VehiclesPage';
 import { CarriersPage } from '../carriers/CarriersPage';
 import { DriverPortal } from '../drivers/DriverPortal';
+import { CreateOrderPage, type OrderDetail as CreateOrderDetail } from '../orders/CreateOrderPage';
 
-type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers' | 'my-orders';
+type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers' | 'my-orders' | 'order-new' | 'order-edit';
 
 type NavItem = { view: CrmView; label: string; Icon: React.ElementType };
 
@@ -94,6 +95,7 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
   const email = useMemo(() => tryGetEmailFromJwt(tokens.accessToken), [tokens.accessToken]);
 
   const [view, setView] = useState<CrmView>(() => defaultView(roles));
+  const [editOrderData, setEditOrderData] = useState<CreateOrderDetail | null>(null);
 
   const { main: NAV_MAIN, fleet: NAV_FLEET } = useMemo(() => buildNav(roles), [roles]);
   const allNav = [...NAV_MAIN, ...NAV_FLEET];
@@ -181,12 +183,21 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
 
         <div className="crm__mainBody">
           {view === 'dashboard'  ? <Dashboard    tokens={tokens} onUnauthorized={onLogout} /> :
-           view === 'orders'     ? <OrdersPage   tokens={tokens} onUnauthorized={onLogout} /> :
+           view === 'orders'     ? <OrdersPage   tokens={tokens} onUnauthorized={onLogout}
+                                    onCreateNew={() => setView('order-new')}
+                                    onEditOrder={(order) => { setEditOrderData(order); setView('order-edit'); }} /> :
            view === 'clients'    ? <ClientsPage  tokens={tokens} onUnauthorized={onLogout} /> :
            view === 'drivers'    ? <DriversPage  tokens={tokens} onUnauthorized={onLogout} /> :
            view === 'vehicles'   ? <VehiclesPage tokens={tokens} onUnauthorized={onLogout} /> :
            view === 'carriers'   ? <CarriersPage tokens={tokens} onUnauthorized={onLogout} /> :
            view === 'my-orders'  ? <DriverPortal tokens={tokens} onUnauthorized={onLogout} /> :
+           view === 'order-new'  ? <CreateOrderPage tokens={tokens} onUnauthorized={onLogout}
+                                    onSaved={() => setView('orders')}
+                                    onCancel={() => setView('orders')} /> :
+           view === 'order-edit' && editOrderData ? <CreateOrderPage tokens={tokens} onUnauthorized={onLogout}
+                                    editOrder={editOrderData}
+                                    onSaved={() => { setEditOrderData(null); setView('orders'); }}
+                                    onCancel={() => { setEditOrderData(null); setView('orders'); }} /> :
            null}
         </div>
       </main>

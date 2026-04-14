@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { ArrowExpandDiagonal01Icon, Cancel01Icon } from 'hugeicons-react'
+import './route-map.css'
 
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ?? ''
 
@@ -60,6 +62,21 @@ export function RouteMap({ pickupAddress, deliveryAddress, pickupCoords, deliver
   const hasToken = !!MAPBOX_TOKEN
   const [status, setStatus] = useState<'loading' | 'ready' | 'no-token' | 'error'>(hasToken ? 'loading' : 'no-token')
   const [distance, setDistance] = useState<string | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Resize map canvas when fullscreen state changes
+  useEffect(() => {
+    const t = setTimeout(() => mapRef.current?.resize(), 50)
+    return () => clearTimeout(t)
+  }, [isFullscreen])
+
+  // Close fullscreen on Escape
+  useEffect(() => {
+    if (!isFullscreen) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsFullscreen(false) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isFullscreen])
 
   useEffect(() => {
     if (!MAPBOX_TOKEN) return
@@ -213,7 +230,7 @@ export function RouteMap({ pickupAddress, deliveryAddress, pickupCoords, deliver
   }
 
   return (
-    <div className="routeMap">
+    <div className={isFullscreen ? 'routeMap routeMap--fullscreen' : 'routeMap'}>
       {status === 'loading' && <div className="routeMap__loader">Завантаження карти…</div>}
       {status === 'error' && (
         <div className="routeMap__msg routeMap__msg--error">
@@ -222,6 +239,18 @@ export function RouteMap({ pickupAddress, deliveryAddress, pickupCoords, deliver
       )}
       <div ref={containerRef} className="routeMap__canvas" style={{ display: status === 'error' ? 'none' : 'block' }} />
       {distance && <div className="routeMap__distance">Відстань: {distance}</div>}
+      {status !== 'error' && (
+        <button
+          type="button"
+          className="routeMap__fsBtn"
+          onClick={() => setIsFullscreen((v) => !v)}
+          title={isFullscreen ? 'Згорнути (Esc)' : 'Розгорнути на весь екран'}
+        >
+          {isFullscreen
+            ? <Cancel01Icon size={16} strokeWidth={2} />
+            : <ArrowExpandDiagonal01Icon size={16} strokeWidth={2} />}
+        </button>
+      )}
     </div>
   )
 }

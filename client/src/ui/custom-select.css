@@ -1,0 +1,185 @@
+/* ─── CustomSelect ────────────────────────────────────── */
+
+.csel {
+  position: relative;
+  width: 100%;
+}
+
+/* ── Trigger button ───────────────────────────────────── */
+
+.csel__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.csel__trigger:hover {
+  border-color: color-mix(in srgb, var(--border) 60%, var(--accent));
+}
+
+.csel__trigger--open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(38, 110, 243, 0.12);
+}
+
+.csel__trigger--warn {
+  border-color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.05);
+}
+
+.csel__val {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.csel__placeholder {
+  flex: 1;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.csel__triggerBadge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.csel__arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.18s;
+}
+
+.csel__arrow--up {
+  transform: rotate(180deg);
+}
+
+/* ── Dropdown ─────────────────────────────────────────── */
+
+.csel__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* ── Option ───────────────────────────────────────────── */
+
+.csel__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--text-2);
+  transition: background 0.1s;
+}
+
+.csel__option:last-child {
+  border-bottom: none;
+}
+
+.csel__option:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.csel__option--active {
+  background: rgba(38, 110, 243, 0.06);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.csel__option--active:hover {
+  background: rgba(38, 110, 243, 0.10);
+}
+
+.csel__option--warn {
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.csel__option--warn:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.10);
+}
+
+.csel__option--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.csel__optBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.csel__optLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.csel__optSub {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.csel__optBadge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.csel__check {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 700;
+  margin-left: 2px;
+}

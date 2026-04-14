@@ -2,7 +2,7 @@ import express, { type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { prisma } from '../utils/prisma';
-import { signAccessToken, signRefreshToken } from '../utils/jwt';
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { signInSchema, signUpSchema } from '../schemas';
@@ -161,6 +161,30 @@ authRouter.post('/signup', validate(signUpSchema), async (req: Request, res: Res
       return fail(res, 500, 'Database connection/permissions error. Check DATABASE_URL and DB grants.', message);
     }
     return fail(res, 500, 'Internal server error', message);
+  }
+});
+
+authRouter.post('/refresh', async (req: Request, res: Response) => {
+  const body = (req.body as Record<string, unknown> | null) ?? {};
+  const refreshToken = typeof body.refreshToken === 'string' ? body.refreshToken.trim() : null;
+  if (!refreshToken) return fail(res, 401, 'Refresh token required');
+  try {
+    const payload = verifyRefreshToken(refreshToken);
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: { UserRoles: true },
+    });
+    if (!user || !user.is_active) return fail(res, 401, 'User not found or inactive');
+    const roles = user.UserRoles.map((r) => r.role);
+    const accessToken = signAccessToken({
+      sub: user.id,
+      email: user.email,
+      company_id: user.company_id,
+      roles,
+    });
+    return ok(res, { accessToken });
+  } catch {
+    return fail(res, 401, 'Invalid or expired refresh token');
   }
 });
 

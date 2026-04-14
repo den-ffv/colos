@@ -34,3 +34,11 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
     throw new Error("Invalid or expired access token");
   }
 }
+
+export function verifyRefreshToken(token: string): RefreshTokenPayload {
+  try {
+    return jwt.verify(token, REFRESH_SECRET) as RefreshTokenPayload;
+  } catch {
+    throw new Error("Invalid or expired refresh token");
+  }
+}

@@ -350,11 +350,11 @@ ordersRouter.get(
   '/lookups',
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const [clients, drivers, vehicles, carriers] = await Promise.all([
+    const [clients, drivers, vehicles, carriers, activeOrders] = await Promise.all([
       prisma.client.findMany({
         where: { company_id: companyId },
         orderBy: { company_name: 'asc' },
-        select: { id: true, company_name: true, contact_person: true },
+        select: { id: true, company_name: true, contact_person: true, phone: true, email: true, address: true },
         take: 500,
       }),
       prisma.driver.findMany({
@@ -372,12 +372,56 @@ ordersRouter.get(
         orderBy: { company_name: 'asc' },
         select: { id: true, company_name: true },
       }),
+      // Active orders to detect which drivers/vehicles are currently busy
+      prisma.order.findMany({
+        where: {
+          company_id: companyId,
+          status: { in: ['CONFIRMED', 'IN_TRANSIT'] },
+          OR: [{ driver_id: { not: null } }, { vehicle_id: { not: null } }],
+        },
+        select: { driver_id: true, vehicle_id: true, order_number: true, status: true },
+      }),
     ]);
 
+    // Build busy maps: resourceId → order info
+    const busyDrivers = new Map<string, { orderNumber: string; status: string }>();
+    const busyVehicles = new Map<string, { orderNumber: string; status: string }>();
+    for (const o of activeOrders) {
+      if (o.driver_id)  busyDrivers.set(o.driver_id,  { orderNumber: o.order_number, status: o.status });
+      if (o.vehicle_id) busyVehicles.set(o.vehicle_id, { orderNumber: o.order_number, status: o.status });
+    }
+
     return ok(res, {
-      clients: clients.map((c) => ({ id: c.id, companyName: c.company_name, contactPerson: c.contact_person })),
-      drivers: drivers.map((d) => ({ id: d.id, name: `${d.first_name} ${d.last_name}` })),
-      vehicles: vehicles.map((v) => ({ id: v.id, plateNumber: v.plate_number, type: v.type, capacity: v.capacity })),
+      clients: clients.map((c) => ({
+        id: c.id,
+        companyName: c.company_name,
+        contactPerson: c.contact_person,
+        phone: c.phone,
+        email: c.email ?? undefined,
+        address: c.address ?? undefined,
+      })),
+      drivers: drivers.map((d) => {
+        const busy = busyDrivers.get(d.id);
+        return {
+          id: d.id,
+          name: `${d.first_name} ${d.last_name}`,
+          isBusy: !!busy,
+          busyOrderNumber: busy?.orderNumber ?? null,
+          busyStatus: busy?.status ?? null,
+        };
+      }),
+      vehicles: vehicles.map((v) => {
+        const busy = busyVehicles.get(v.id);
+        return {
+          id: v.id,
+          plateNumber: v.plate_number,
+          type: v.type,
+          capacity: v.capacity,
+          isBusy: !!busy,
+          busyOrderNumber: busy?.orderNumber ?? null,
+          busyStatus: busy?.status ?? null,
+        };
+      }),
       carriers: carriers.map((c) => ({ id: c.id, companyName: c.company_name })),
     });
   }),

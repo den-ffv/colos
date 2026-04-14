@@ -53,10 +53,20 @@
 .drivers__filterSelect {
   font-size: 13px;
   padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--surface);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.drivers__filterSelect:hover {
+  border-color: color-mix(in srgb, var(--border) 60%, var(--accent));
+}
+
+.drivers__filterSelect:focus {
+  border-color: rgba(38, 110, 243, 0.6);
+  box-shadow: 0 0 0 3px rgba(38, 110, 243, 0.10);
 }
 
 .drivers__grid {

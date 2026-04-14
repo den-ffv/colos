@@ -9,6 +9,7 @@ import { Badge } from '../../ui/Badge'
 import { tryGetRolesFromJwt } from '../crm/jwt'
 import { RouteMap } from './RouteMap'
 import { AddressAutocomplete, type AddressSelection } from './AddressAutocomplete'
+import type { OrderDetail as CreateOrderDetail } from './CreateOrderPage'
 import { connectSocket, disconnectSocket, type OrderStatusChangedPayload, type OrderUpdatedPayload } from '../../lib/socket'
 import { getApiBaseUrl } from '../../lib/env'
 import './orders.css'
@@ -186,9 +187,13 @@ type OrderForm = typeof EMPTY_FORM
 export function OrdersPage({
   tokens,
   onUnauthorized,
+  onCreateNew,
+  onEditOrder,
 }: {
   tokens: AuthTokens
   onUnauthorized: () => void
+  onCreateNew?: () => void
+  onEditOrder?: (order: CreateOrderDetail) => void
 }) {
   const roles = useMemo(() => tryGetRolesFromJwt(tokens.accessToken), [tokens.accessToken])
   const canDelete = roles.includes('ADMIN')
@@ -472,6 +477,7 @@ export function OrdersPage({
   /* ─── create / edit modal ────── */
 
   async function openCreate() {
+    if (onCreateNew) { onCreateNew(); return }
     setEditMode('create')
     setForm({ ...EMPTY_FORM })
     setFormError(null)
@@ -485,6 +491,33 @@ export function OrdersPage({
 
   async function openEdit() {
     if (!details) return
+    if (onEditOrder) {
+      onEditOrder({
+        id: details.id,
+        orderNumber: details.orderNumber,
+        clientId: details.clientId,
+        executionType: details.executionType,
+        pickupAddress: details.pickupAddress,
+        deliveryAddress: details.deliveryAddress,
+        pickupDate: details.pickupDate,
+        deliveryDate: details.deliveryDate,
+        productType: details.productType,
+        quantity: details.quantity,
+        unit: details.unit,
+        weight: details.weight,
+        volume: details.volume,
+        driverId: details.driverId,
+        vehicleId: details.vehicleId,
+        estimatedFuelCost: details.estimatedFuelCost,
+        estimatedSalaryCost: details.estimatedSalaryCost,
+        carrierId: details.carrierId,
+        carrierAgreedPrice: details.carrierAgreedPrice,
+        carrierVehicleInfo: details.carrierVehicleInfo,
+        clientPrice: details.clientPrice,
+        notes: details.notes,
+      })
+      return
+    }
     setEditMode('edit')
     setPickupCoords(null)
     setDeliveryCoords(null)

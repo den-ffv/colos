@@ -1,3 +1,30 @@
+/* ── Global select reset ──────────────────────────────── */
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3 5l4 4 4-4' stroke='%236b7280' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px !important;
+  cursor: pointer;
+}
+
+select:focus {
+  outline: none;
+}
+
+/* ── Global focus reset ───────────────────────────────── */
+
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent, #266EF3);
+  outline-offset: 2px;
+}
+
 :root {
   --bg: #f4f6f9;
   --surface: #ffffff;
@@ -118,13 +145,20 @@
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: var(--surface);
+  background-color: var(--surface);
   color: var(--text);
+  font-size: 13px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ui-input:hover {
+  border-color: color-mix(in srgb, var(--border) 60%, var(--accent));
 }
 
 .ui-input:focus {
-  outline: 2px solid rgba(38, 110, 243, 0.22);
-  border-color: rgba(38, 110, 243, 0.5);
+  outline: none;
+  border-color: rgba(38, 110, 243, 0.6);
+  box-shadow: 0 0 0 3px rgba(38, 110, 243, 0.10);
 }
 
 .ui-input::placeholder {
@@ -403,17 +437,21 @@
   padding: 9px 12px;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
-  background: #ffffff;
+  background-color: #ffffff;
   color: #141A27;
   font-size: 13.5px;
   transition: border-color 0.15s, box-shadow 0.15s;
   font-family: inherit;
 }
 
+.drawer-form__input:hover {
+  border-color: color-mix(in srgb, #e5e7eb 60%, #266EF3);
+}
+
 .drawer-form__input:focus {
   outline: none;
   border-color: #266EF3;
-  box-shadow: 0 0 0 3px rgba(38, 110, 243, 0.16);
+  box-shadow: 0 0 0 3px rgba(38, 110, 243, 0.12);
 }
 
 .drawer-form__input::placeholder {
