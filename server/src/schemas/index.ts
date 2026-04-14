@@ -131,7 +131,7 @@ export const createCarrierSchema = z.object({
   email: z.string().trim().email('Невірний email').nullable().optional(),
   vehicleTypes: z.array(vehicleTypeEnum).optional(),
   maxCapacity: z
-    .number({ required_error: 'Вантажопідйомність обовʼязкова' })
+    .number()
     .positive('Повинна бути > 0')
     .max(999, 'Максимум 999 т'),
   coverageAreas: z

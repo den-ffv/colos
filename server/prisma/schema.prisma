@@ -43,6 +43,8 @@ enum Role {
   MANAGER
   DISPATCHER
   ACCOUNTANT
+  LOGIST
+  DRIVER
 }
 
 model Company {
@@ -80,9 +82,10 @@ model User {
   updated_at   DateTime    @updatedAt
   ui_language  UiLanguage  @default(UA)
   
-  OrdersManaged Order[]
-  UserRoles     UserRole[]
-  
+  OrdersManaged  Order[]
+  UserRoles      UserRole[]
+  DriverProfile  Driver?     // ONE-TO-ONE: якщо User є водієм-обліковим записом
+
   @@map("users")
 }
 
@@ -127,11 +130,14 @@ model Driver {
   notes           String?
   company_id      String
   company         Company   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  // Опціональний зв'язок з обліковим записом (User з роллю DRIVER)
+  user_id         String?   @unique
+  user            User?     @relation(fields: [user_id], references: [id], onDelete: SetNull)
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
-  
+
   Orders          Order[]
-  
+
   @@map("drivers")
 }
 

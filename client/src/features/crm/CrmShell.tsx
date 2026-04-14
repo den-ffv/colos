@@ -10,41 +10,100 @@ import {
   Settings01Icon,
   Notification02Icon,
   ArrowDown01Icon,
+  StreeringWheelIcon,
 } from 'hugeicons-react';
 import type { AuthTokens } from '../auth/auth.storage';
-import { tryGetEmailFromJwt } from './jwt';
+import { tryGetEmailFromJwt, tryGetRolesFromJwt } from './jwt';
 import { Dashboard } from './Dashboard';
 import { ClientsPage } from '../clients/ClientsPage';
 import { OrdersPage } from '../orders/OrdersPage';
 import { DriversPage } from '../drivers/DriversPage';
 import { VehiclesPage } from '../vehicles/VehiclesPage';
 import { CarriersPage } from '../carriers/CarriersPage';
+import { DriverPortal } from '../drivers/DriverPortal';
 
-type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers';
+type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers' | 'my-orders';
 
-const NAV_MAIN: { view: CrmView; label: string; Icon: React.ElementType }[] = [
-  { view: 'dashboard', label: 'Dashboard',  Icon: DashboardSpeed02Icon },
-  { view: 'orders',    label: 'Shipments',  Icon: DeliveryTruck01Icon  },
-  { view: 'clients',   label: 'Customers',  Icon: UserGroupIcon        },
-  { view: 'carriers',  label: 'Carriers',   Icon: Building01Icon       },
-];
+type NavItem = { view: CrmView; label: string; Icon: React.ElementType };
 
-const NAV_FLEET: { view: CrmView; label: string; Icon: React.ElementType }[] = [
-  { view: 'drivers',   label: 'Drivers',    Icon: UserAccountIcon      },
-  { view: 'vehicles',  label: 'Vehicles',   Icon: TruckIcon            },
-];
+/* ── Які пункти меню видно для кожної ролі ──────────────── */
+
+function buildNav(roles: string[]): { main: NavItem[]; fleet: NavItem[] } {
+  const isAdmin   = roles.includes('ADMIN');
+  const isLogist  = roles.includes('LOGIST');
+  const isManager = roles.includes('MANAGER');
+  const isDriver  = roles.includes('DRIVER');
+
+  // Водій бачить тільки свої договори
+  if (isDriver && !isAdmin && !isLogist && !isManager) {
+    return {
+      main: [{ view: 'my-orders', label: 'Мої договори', Icon: StreeringWheelIcon }],
+      fleet: [],
+    };
+  }
+
+  const main: NavItem[] = [];
+  const fleet: NavItem[] = [];
+
+  if (isAdmin) {
+    main.push({ view: 'dashboard', label: 'Dashboard', Icon: DashboardSpeed02Icon });
+  }
+
+  if (isAdmin || isLogist || isManager) {
+    main.push({ view: 'orders', label: 'Shipments', Icon: DeliveryTruck01Icon });
+  }
+
+  if (isAdmin || isLogist) {
+    main.push({ view: 'clients', label: 'Customers', Icon: UserGroupIcon });
+  }
+
+  if (isAdmin) {
+    main.push({ view: 'carriers', label: 'Carriers', Icon: Building01Icon });
+  }
+
+  if (isAdmin || isManager) {
+    fleet.push({ view: 'drivers', label: 'Drivers', Icon: UserAccountIcon });
+    fleet.push({ view: 'vehicles', label: 'Vehicles', Icon: TruckIcon });
+  }
+
+  return { main, fleet };
+}
+
+/* ── defaultView — перша доступна сторінка для ролі ─────── */
+
+function defaultView(roles: string[]): CrmView {
+  if (roles.includes('DRIVER') && !roles.includes('ADMIN') && !roles.includes('LOGIST') && !roles.includes('MANAGER')) {
+    return 'my-orders';
+  }
+  if (roles.includes('ADMIN')) return 'dashboard';
+  return 'orders';
+}
+
+/* ── Мітка ролі для відображення ───────────────────────── */
+
+function roleLabel(roles: string[]): string {
+  if (roles.includes('ADMIN'))   return 'Адміністратор';
+  if (roles.includes('LOGIST'))  return 'Логіст';
+  if (roles.includes('MANAGER')) return 'Менеджер';
+  if (roles.includes('DRIVER'))  return 'Водій';
+  return '';
+}
 
 export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: () => void }) {
-  const [view, setView] = useState<CrmView>('dashboard');
+  const roles = useMemo(() => tryGetRolesFromJwt(tokens.accessToken), [tokens.accessToken]);
   const email = useMemo(() => tryGetEmailFromJwt(tokens.accessToken), [tokens.accessToken]);
+
+  const [view, setView] = useState<CrmView>(() => defaultView(roles));
+
+  const { main: NAV_MAIN, fleet: NAV_FLEET } = useMemo(() => buildNav(roles), [roles]);
+  const allNav = [...NAV_MAIN, ...NAV_FLEET];
 
   const displayName = email ? email.split('@')[0] : 'User';
   const avatarLetter = displayName[0].toUpperCase();
-
-  const allNav = [...NAV_MAIN, ...NAV_FLEET];
   const currentLabel = allNav.find((n) => n.view === view)?.label ?? '';
+  const badge = roleLabel(roles);
 
-  function NavButton({ view: v, label, Icon }: { view: CrmView; label: string; Icon: React.ElementType }) {
+  function NavButton({ view: v, label, Icon }: NavItem) {
     const active = v === view;
     return (
       <button
@@ -72,11 +131,19 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
         </div>
 
         <nav className="crm__nav" aria-label="CRM navigation">
-          <span className="crm__navLabel">Main</span>
-          {NAV_MAIN.map((item) => <NavButton key={item.view} {...item} />)}
+          {NAV_MAIN.length > 0 && (
+            <>
+              <span className="crm__navLabel">Main</span>
+              {NAV_MAIN.map((item) => <NavButton key={item.view} {...item} />)}
+            </>
+          )}
 
-          <span className="crm__navLabel">Fleet Management</span>
-          {NAV_FLEET.map((item) => <NavButton key={item.view} {...item} />)}
+          {NAV_FLEET.length > 0 && (
+            <>
+              <span className="crm__navLabel">Fleet Management</span>
+              {NAV_FLEET.map((item) => <NavButton key={item.view} {...item} />)}
+            </>
+          )}
         </nav>
 
         <div className="crm__sidebarFooter">
@@ -95,11 +162,12 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
       <main className="crm__main">
         <header className="crm__topbar">
           <div className="crm__topbarLeft">
-            <span className="crm__greeting">Welcome back, {displayName}!</span>
+            <span className="crm__greeting">Вітаємо, {displayName}!</span>
             <span className="crm__subtitle">{currentLabel} overview</span>
           </div>
 
           <div className="crm__topbarRight">
+            {badge && <span className="crm__roleBadge">{badge}</span>}
             <button type="button" className="crm__iconBtn" aria-label="Notifications">
               <Notification02Icon size={17} strokeWidth={1.6} />
             </button>
@@ -112,19 +180,14 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
         </header>
 
         <div className="crm__mainBody">
-          {view === 'dashboard' ? (
-            <Dashboard tokens={tokens} onUnauthorized={onLogout} />
-          ) : view === 'orders' ? (
-            <OrdersPage tokens={tokens} onUnauthorized={onLogout} />
-          ) : view === 'clients' ? (
-            <ClientsPage tokens={tokens} onUnauthorized={onLogout} />
-          ) : view === 'drivers' ? (
-            <DriversPage tokens={tokens} onUnauthorized={onLogout} />
-          ) : view === 'vehicles' ? (
-            <VehiclesPage tokens={tokens} onUnauthorized={onLogout} />
-          ) : view === 'carriers' ? (
-            <CarriersPage tokens={tokens} onUnauthorized={onLogout} />
-          ) : null}
+          {view === 'dashboard'  ? <Dashboard    tokens={tokens} onUnauthorized={onLogout} /> :
+           view === 'orders'     ? <OrdersPage   tokens={tokens} onUnauthorized={onLogout} /> :
+           view === 'clients'    ? <ClientsPage  tokens={tokens} onUnauthorized={onLogout} /> :
+           view === 'drivers'    ? <DriversPage  tokens={tokens} onUnauthorized={onLogout} /> :
+           view === 'vehicles'   ? <VehiclesPage tokens={tokens} onUnauthorized={onLogout} /> :
+           view === 'carriers'   ? <CarriersPage tokens={tokens} onUnauthorized={onLogout} /> :
+           view === 'my-orders'  ? <DriverPortal tokens={tokens} onUnauthorized={onLogout} /> :
+           null}
         </div>
       </main>
     </div>

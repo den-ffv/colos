@@ -188,6 +188,7 @@ vehiclesRouter.get(
 
 vehiclesRouter.post(
   '/',
+  authorize(['ADMIN', 'MANAGER']),
   validate(createVehicleSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
@@ -224,6 +225,7 @@ vehiclesRouter.post(
 
 vehiclesRouter.put(
   '/:id',
+  authorize(['ADMIN', 'MANAGER']),
   validate(updateVehicleSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
@@ -264,6 +266,7 @@ vehiclesRouter.put(
 
 vehiclesRouter.patch(
   '/:id/availability',
+  authorize(['ADMIN', 'MANAGER']),
   validate(availabilitySchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);

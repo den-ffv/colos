@@ -224,10 +224,79 @@ function orderListDto(o: OrderRow) {
   };
 }
 
+/* ─── GET /my – orders assigned to the calling DRIVER ── */
+
+ordersRouter.get(
+  '/my',
+  authorize(['DRIVER']),
+  asyncHandler(async (req: Request, res: Response) => {
+    const auth = (req as AuthenticatedRequest).auth;
+    const driver = await prisma.driver.findFirst({
+      where: { user_id: auth.sub, company_id: auth.company_id },
+      select: { id: true },
+    });
+    if (!driver) return fail(res, 403, 'Ваш обліковий запис не прив\'язаний до профілю водія');
+
+    const page = parsePage(req.query.page, 1);
+    const limit = parseLimit(req.query.limit, 20, 100);
+    const where = { company_id: auth.company_id, driver_id: driver.id };
+
+    const [total, rows] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          order_number: true,
+          status: true,
+          pickup_address: true,
+          delivery_address: true,
+          pickup_date: true,
+          delivery_date: true,
+          product_type: true,
+          weight: true,
+          notes: true,
+          client: { select: { id: true, company_name: true, contact_person: true, phone: true } },
+          vehicle: { select: { id: true, plate_number: true, type: true } },
+          created_at: true,
+          updated_at: true,
+        },
+      }),
+    ]);
+
+    return okList(
+      res,
+      rows.map((o) => ({
+        id: o.id,
+        orderNumber: o.order_number,
+        status: o.status,
+        pickupAddress: o.pickup_address,
+        deliveryAddress: o.delivery_address,
+        pickupDate: o.pickup_date.toISOString(),
+        deliveryDate: o.delivery_date?.toISOString(),
+        productType: o.product_type ?? undefined,
+        weight: o.weight ?? undefined,
+        notes: o.notes ?? undefined,
+        client: o.client
+          ? { id: o.client.id, companyName: o.client.company_name, contactPerson: o.client.contact_person, phone: o.client.phone }
+          : null,
+        vehicle: o.vehicle ? { plateNumber: o.vehicle.plate_number, type: o.vehicle.type } : undefined,
+        createdAt: o.created_at.toISOString(),
+        updatedAt: o.updated_at.toISOString(),
+      })),
+      { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    );
+  }),
+);
+
 /* ─── GET /  – paginated list ─────────────────────────── */
 
 ordersRouter.get(
   '/',
+  authorize(['ADMIN', 'LOGIST', 'MANAGER']),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const page = parsePage(req.query.page, 1);
@@ -333,6 +402,7 @@ ordersRouter.get(
 
 ordersRouter.post(
   '/',
+  authorize(['ADMIN', 'LOGIST']),
   validate(createOrderSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
@@ -407,6 +477,7 @@ ordersRouter.post(
 
 ordersRouter.put(
   '/:id',
+  authorize(['ADMIN', 'LOGIST']),
   validate(updateOrderSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
@@ -474,9 +545,11 @@ ordersRouter.put(
 
 ordersRouter.patch(
   '/:id/status',
+  authorize(['ADMIN', 'LOGIST', 'DRIVER']),
   validate(updateOrderStatusSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const companyId = getCompanyId(req);
+    const auth = (req as AuthenticatedRequest).auth;
+    const companyId = auth.company_id;
     const body = (req.body as Record<string, unknown> | null) ?? {};
     const newStatus = normalizeText(body.status) as OrderStatus | null;
 
@@ -486,8 +559,19 @@ ordersRouter.patch(
 
     const existing = await prisma.order.findFirst({
       where: { id: req.params.id, company_id: companyId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, driver_id: true },
     });
+
+    // DRIVER може змінювати статус тільки для замовлень, де він призначений
+    if (auth.roles.includes('DRIVER') && !auth.roles.includes('ADMIN') && !auth.roles.includes('LOGIST')) {
+      const driverProfile = await prisma.driver.findFirst({
+        where: { user_id: auth.sub, company_id: companyId },
+        select: { id: true },
+      });
+        if (!driverProfile || existing?.driver_id !== driverProfile.id) {
+        return fail(res, 403, 'Ви можете змінювати статус лише своїх замовлень');
+      }
+    }
     if (!existing) return fail(res, 404, 'Order not found');
 
     const allowed = STATUS_TRANSITIONS[existing.status];

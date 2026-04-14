@@ -381,6 +381,18 @@
   color: var(--text);
 }
 
+.crm__roleBadge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: var(--accent-subtle, #e8f0fe);
+  color: var(--accent, #4285f4);
+  border: 1px solid var(--accent-border, #c5d8fd);
+  white-space: nowrap;
+}
+
 .crm__userChip {
   display: flex;
   align-items: center;

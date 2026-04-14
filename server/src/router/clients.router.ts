@@ -167,6 +167,7 @@ clientsRouter.get(
 
 clientsRouter.post(
   '/',
+  authorize(['ADMIN', 'LOGIST']),
   validate(createClientSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
@@ -212,6 +213,7 @@ clientsRouter.post(
 
 clientsRouter.put(
   '/:id',
+  authorize(['ADMIN', 'LOGIST']),
   validate(updateClientSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);

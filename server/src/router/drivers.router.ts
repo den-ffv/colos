@@ -193,6 +193,7 @@ driversRouter.get(
 
 driversRouter.post(
   '/',
+  authorize(['ADMIN', 'MANAGER']),
   validate(createDriverSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
@@ -228,6 +229,7 @@ driversRouter.post(
 
 driversRouter.put(
   '/:id',
+  authorize(['ADMIN', 'MANAGER']),
   validate(updateDriverSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
@@ -266,6 +268,7 @@ driversRouter.put(
 
 driversRouter.patch(
   '/:id/availability',
+  authorize(['ADMIN', 'MANAGER']),
   validate(availabilitySchema),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
