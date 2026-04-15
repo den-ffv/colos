@@ -11,12 +11,19 @@ import './vehicles.css'
 /* ─── types ───────────────────────────────────────────── */
 
 type VehicleType = 'TRUCK' | 'VAN' | 'CAR' | 'REFRIGERATOR'
+type FuelType = 'DIESEL' | 'PETROL_95' | 'PETROL_92' | 'GAS'
 
 type Vehicle = {
   id: string
   plateNumber: string
   type: VehicleType
   capacity: number
+  fuelType?: FuelType
+  tankCapacity?: number
+  fuelConsumption?: number
+  cargoVolume?: number
+  costPerKm?: number
+  maxRange?: number
   isAvailable: boolean
   notes?: string
   createdAt: string
@@ -45,6 +52,13 @@ const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
   REFRIGERATOR: 'Рефрижератор',
 }
 
+const FUEL_TYPE_LABELS: Record<FuelType, string> = {
+  DIESEL: 'Дизель',
+  PETROL_95: 'А-95',
+  PETROL_92: 'А-92',
+  GAS: 'Газ (LPG)',
+}
+
 /* ─── helpers ─────────────────────────────────────────── */
 
 function isSuccess<T>(res: ApiResponse<T>): res is { success: true; data: T } {
@@ -67,6 +81,12 @@ const EMPTY_FORM = {
   plateNumber: '',
   type: 'TRUCK' as VehicleType,
   capacity: '',
+  fuelType: 'DIESEL' as FuelType,
+  tankCapacity: '',
+  fuelConsumption: '',
+  cargoVolume: '',
+  costPerKm: '',
+  maxRange: '',
   isAvailable: true,
   notes: '',
 }
@@ -171,6 +191,12 @@ export function VehiclesPage({
       plateNumber: details.plateNumber,
       type: details.type,
       capacity: details.capacity.toString(),
+      fuelType: details.fuelType ?? 'DIESEL',
+      tankCapacity: details.tankCapacity?.toString() ?? '',
+      fuelConsumption: details.fuelConsumption?.toString() ?? '',
+      cargoVolume: details.cargoVolume?.toString() ?? '',
+      costPerKm: details.costPerKm?.toString() ?? '',
+      maxRange: details.maxRange?.toString() ?? '',
       isAvailable: details.isAvailable,
       notes: details.notes ?? '',
     })
@@ -197,15 +223,33 @@ export function VehiclesPage({
     setFormError(null)
     setFormSubmitting(true)
     try {
+      const tankCapacity = form.tankCapacity.trim() ? Number(form.tankCapacity) : null
+      const fuelConsumption = form.fuelConsumption.trim() ? Number(form.fuelConsumption) : null
+      const cargoVolume = form.cargoVolume.trim() ? Number(form.cargoVolume) : null
+      const costPerKm = form.costPerKm.trim() ? Number(form.costPerKm) : null
+      const maxRange = form.maxRange.trim() ? Number(form.maxRange) : null
+
       const payload = {
         plateNumber: form.plateNumber.trim(),
         type: form.type,
         capacity: form.capacity ? Number(form.capacity) : null,
+        fuelType: form.fuelType,
+        tankCapacity,
+        fuelConsumption,
+        cargoVolume,
+        costPerKm,
+        maxRange,
         isAvailable: form.isAvailable,
         notes: emptyToNull(form.notes),
       }
-      if (!payload.plateNumber || !payload.type || payload.capacity === null) {
-        setFormError("Номерний знак, тип та вантажопідйомність обов'язкові")
+      const invalidNumbers = [payload.capacity, tankCapacity, fuelConsumption, cargoVolume, costPerKm, maxRange]
+        .some((v) => v === null || Number.isNaN(v))
+      if (!payload.plateNumber || !payload.type || !payload.fuelType || invalidNumbers) {
+        setFormError("Номерний знак, тип, паливо, технічні та економічні параметри обов'язкові")
+        return
+      }
+      if (payload.capacity <= 0 || tankCapacity! <= 0 || fuelConsumption! <= 0 || cargoVolume! <= 0 || maxRange! <= 0 || costPerKm! < 0) {
+        setFormError('Перевірте числові значення')
         return
       }
       if (editMode === 'create') {
@@ -336,6 +380,12 @@ export function VehiclesPage({
               <KV k="Номерний знак" v={details.plateNumber} />
               <KV k="Тип" v={<span className="vehicles__typeBadge">{VEHICLE_TYPE_LABELS[details.type]}</span>} />
               <KV k="Вантажопідйомність" v={`${details.capacity} т`} />
+              <KV k="Пальне" v={details.fuelType ? FUEL_TYPE_LABELS[details.fuelType] : '—'} />
+              <KV k="Обʼєм баку" v={details.tankCapacity !== undefined ? `${details.tankCapacity} л` : '—'} />
+              <KV k="Витрата" v={details.fuelConsumption !== undefined ? `${details.fuelConsumption} л/100км` : '—'} />
+              <KV k="Обʼєм кузова" v={details.cargoVolume !== undefined ? `${details.cargoVolume} м³` : '—'} />
+              <KV k="Вартість/км" v={details.costPerKm !== undefined ? `${details.costPerKm} грн` : '—'} />
+              <KV k="Запас ходу" v={details.maxRange !== undefined ? `${details.maxRange} км` : '—'} />
               <KV k="Доступність" v={
                 <span className={`vehicles__availBadge vehicles__availBadge--${details.isAvailable ? 'yes' : 'no'}`}>
                   {details.isAvailable ? 'Доступний' : 'Зайнятий'}
@@ -424,6 +474,91 @@ export function VehiclesPage({
                 placeholder="20"
                 value={form.capacity}
                 onChange={(e) => setForm((s) => ({ ...s, capacity: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className="drawer-form__section">Паливо</div>
+
+          <div className="drawer-form__row">
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Тип пального</span>
+              <select
+                className="drawer-form__input"
+                value={form.fuelType}
+                onChange={(e) => setForm((s) => ({ ...s, fuelType: e.target.value as FuelType }))}
+              >
+                {(Object.keys(FUEL_TYPE_LABELS) as FuelType[]).map((t) => (
+                  <option key={t} value={t}>{FUEL_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+            </label>
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Обʼєм баку (л)</span>
+              <input
+                className="drawer-form__input"
+                type="number"
+                step="1"
+                min="0"
+                placeholder="400"
+                value={form.tankCapacity}
+                onChange={(e) => setForm((s) => ({ ...s, tankCapacity: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className="drawer-form__row">
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Витрата (л/100км)</span>
+              <input
+                className="drawer-form__input"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="28"
+                value={form.fuelConsumption}
+                onChange={(e) => setForm((s) => ({ ...s, fuelConsumption: e.target.value }))}
+              />
+            </label>
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Обʼєм кузова (м³)</span>
+              <input
+                className="drawer-form__input"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="60"
+                value={form.cargoVolume}
+                onChange={(e) => setForm((s) => ({ ...s, cargoVolume: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className="drawer-form__section">Економіка</div>
+
+          <div className="drawer-form__row">
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Вартість/км (грн)</span>
+              <input
+                className="drawer-form__input"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="8"
+                value={form.costPerKm}
+                onChange={(e) => setForm((s) => ({ ...s, costPerKm: e.target.value }))}
+              />
+            </label>
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Запас ходу (км)</span>
+              <input
+                className="drawer-form__input"
+                type="number"
+                step="1"
+                min="0"
+                placeholder="1200"
+                value={form.maxRange}
+                onChange={(e) => setForm((s) => ({ ...s, maxRange: e.target.value }))}
               />
             </label>
           </div>

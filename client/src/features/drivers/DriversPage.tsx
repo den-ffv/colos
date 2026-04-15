@@ -16,11 +16,15 @@ type Driver = {
   lastName: string
   phone: string
   licenseNumber: string
+  payType: DriverPayType
+  payRate: number
   isAvailable: boolean
   notes?: string
   createdAt: string
   updatedAt: string
 }
+
+type DriverPayType = 'PER_KM' | 'PER_HOUR' | 'PER_DAY' | 'FIXED'
 
 type DriverOrder = {
   id: string
@@ -53,11 +57,52 @@ function emptyToNull(v: string) {
   return s || null
 }
 
+const PHONE_RE = /^[+\d][\d\s\-()[\]]{4,18}[\d)]?$/
+const LICENSE_RE = /^[A-Z]{2}-\d{4}$/
+
+const PAY_TYPE_LABELS: Record<DriverPayType, string> = {
+  PER_KM: 'За км',
+  PER_HOUR: 'За годину',
+  PER_DAY: 'За день',
+  FIXED: 'Фіксовано',
+}
+
+const PAY_TYPE_UNITS: Record<DriverPayType, string> = {
+  PER_KM: 'грн/км',
+  PER_HOUR: 'грн/год',
+  PER_DAY: 'грн/день',
+  FIXED: 'грн/рейс',
+}
+
+function validateDriverForm(f: DriverForm): Record<string, string> {
+  const errors: Record<string, string> = {}
+
+  if (!f.lastName.trim()) errors.lastName = 'Обовʼязкове поле'
+  if (!f.firstName.trim()) errors.firstName = 'Обовʼязкове поле'
+
+  const phone = f.phone.trim()
+  if (!phone) errors.phone = 'Обовʼязкове поле'
+  else if (!PHONE_RE.test(phone)) errors.phone = 'Невірний формат (напр. +380671234567)'
+
+  const license = f.licenseNumber.trim().toUpperCase()
+  if (!license) errors.licenseNumber = 'Обовʼязкове поле'
+  else if (!LICENSE_RE.test(license)) errors.licenseNumber = 'Формат AA-1111'
+
+  if (!f.payType) errors.payType = 'Обовʼязкове поле'
+  const payRate = f.payRate.trim()
+  if (!payRate) errors.payRate = 'Обовʼязкове поле'
+  else if (Number(payRate) <= 0 || Number.isNaN(Number(payRate))) errors.payRate = 'Ставка має бути > 0'
+
+  return errors
+}
+
 const EMPTY_FORM = {
   firstName: '',
   lastName: '',
   phone: '',
   licenseNumber: '',
+  payType: 'PER_KM' as DriverPayType,
+  payRate: '',
   isAvailable: true,
   notes: '',
 }
@@ -96,6 +141,8 @@ export function DriversPage({
   const [editMode, setEditMode] = useState<'create' | 'edit'>('create')
   const [form, setForm] = useState<DriverForm>({ ...EMPTY_FORM })
   const [formError, setFormError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [formSubmitting, setFormSubmitting] = useState(false)
 
   const query = useMemo(() => {
@@ -125,6 +172,20 @@ export function DriversPage({
 
   useEffect(() => { void loadList() }, [loadList])
 
+  useEffect(() => {
+    if (!Object.keys(touched).length) return
+    const errors = validateDriverForm(form)
+    const next: Record<string, string> = {}
+    for (const key of Object.keys(touched)) {
+      if (touched[key] && errors[key]) next[key] = errors[key]
+    }
+    setFieldErrors(next)
+  }, [form, touched])
+
+  function touchField(key: keyof DriverForm) {
+    setTouched((s) => ({ ...s, [key]: true }))
+  }
+
   async function openDetails(id: string) {
     setSelectedId(id)
     setDetails(null)
@@ -150,6 +211,8 @@ export function DriversPage({
     setEditMode('create')
     setForm({ ...EMPTY_FORM })
     setFormError(null)
+    setFieldErrors({})
+    setTouched({})
     setEditOpen(true)
   }
 
@@ -160,11 +223,15 @@ export function DriversPage({
       firstName: details.firstName,
       lastName: details.lastName,
       phone: details.phone,
-      licenseNumber: details.licenseNumber,
+      licenseNumber: details.licenseNumber.toUpperCase(),
+      payType: details.payType,
+      payRate: details.payRate.toString(),
       isAvailable: details.isAvailable,
       notes: details.notes ?? '',
     })
     setFormError(null)
+    setFieldErrors({})
+    setTouched({})
     setEditOpen(true)
   }
 
@@ -184,20 +251,35 @@ export function DriversPage({
   }
 
   async function submitForm() {
+    const errors = validateDriverForm(form)
+    if (Object.keys(errors).length) {
+      setTouched((s) => ({
+        ...s,
+        ...Object.keys(errors).reduce((acc, key) => {
+          acc[key] = true
+          return acc
+        }, {} as Record<string, boolean>),
+      }))
+      setFieldErrors(errors)
+      setFormError(null)
+      return
+    }
+
+    setFieldErrors({})
     setFormError(null)
     setFormSubmitting(true)
     try {
+      const trimmedPhone = form.phone.trim()
+      const trimmedLicense = form.licenseNumber.trim().toUpperCase()
       const payload = {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        phone: form.phone.trim(),
-        licenseNumber: form.licenseNumber.trim(),
+        phone: trimmedPhone,
+        licenseNumber: trimmedLicense,
+        payType: form.payType,
+        payRate: Number(form.payRate),
         isAvailable: form.isAvailable,
         notes: emptyToNull(form.notes),
-      }
-      if (!payload.firstName || !payload.lastName || !payload.phone || !payload.licenseNumber) {
-        setFormError("Ім'я, прізвище, телефон та номер ліцензії обов'язкові")
-        return
       }
       if (editMode === 'create') {
         const res = await apiPostJson<ApiResponse<Driver>>('/api/drivers', payload, { headers: authHeaders })
@@ -323,6 +405,8 @@ export function DriversPage({
               <KV k="Імʼя" v={details.firstName} />
               <KV k="Телефон" v={details.phone} />
               <KV k="Номер ліцензії" v={details.licenseNumber} />
+              <KV k="Тип оплати" v={PAY_TYPE_LABELS[details.payType]} />
+              <KV k="Ставка" v={`${details.payRate} ${PAY_TYPE_UNITS[details.payType]}`} />
               <KV k="Доступність" v={
                 <span className={`drivers__availBadge drivers__availBadge--${details.isAvailable ? 'yes' : 'no'}`}>
                   {details.isAvailable ? 'Доступний' : 'Зайнятий'}
@@ -386,7 +470,9 @@ export function DriversPage({
                 placeholder="Шевченко"
                 value={form.lastName}
                 onChange={(e) => setForm((s) => ({ ...s, lastName: e.target.value }))}
+                onBlur={() => touchField('lastName')}
               />
+              {fieldErrors.lastName && <span className="drivers__fieldError">{fieldErrors.lastName}</span>}
             </label>
             <label className="drawer-form__field">
               <span className="drawer-form__label drawer-form__label--required">Імʼя</span>
@@ -395,7 +481,9 @@ export function DriversPage({
                 placeholder="Тарас"
                 value={form.firstName}
                 onChange={(e) => setForm((s) => ({ ...s, firstName: e.target.value }))}
+                onBlur={() => touchField('firstName')}
               />
+              {fieldErrors.firstName && <span className="drivers__fieldError">{fieldErrors.firstName}</span>}
             </label>
           </div>
 
@@ -404,9 +492,12 @@ export function DriversPage({
             <input
               className="drawer-form__input"
               placeholder="+380 XX XXX XX XX"
+              inputMode="tel"
               value={form.phone}
               onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))}
+              onBlur={() => touchField('phone')}
             />
+            {fieldErrors.phone && <span className="drivers__fieldError">{fieldErrors.phone}</span>}
           </label>
 
           <div className="drawer-form__section">Документи</div>
@@ -415,11 +506,46 @@ export function DriversPage({
             <span className="drawer-form__label drawer-form__label--required">Номер ліцензії</span>
             <input
               className="drawer-form__input"
-              placeholder="ААА 000000"
+              placeholder="AA-1111"
               value={form.licenseNumber}
-              onChange={(e) => setForm((s) => ({ ...s, licenseNumber: e.target.value }))}
+              onChange={(e) => setForm((s) => ({ ...s, licenseNumber: e.target.value.toUpperCase() }))}
+              onBlur={() => touchField('licenseNumber')}
             />
+            {fieldErrors.licenseNumber && <span className="drivers__fieldError">{fieldErrors.licenseNumber}</span>}
           </label>
+
+          <div className="drawer-form__section">Оплата</div>
+
+          <div className="drawer-form__row">
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Тип оплати</span>
+              <select
+                className="drawer-form__input"
+                value={form.payType}
+                onChange={(e) => { setForm((s) => ({ ...s, payType: e.target.value as DriverPayType })); touchField('payType') }}
+              >
+                {(Object.keys(PAY_TYPE_LABELS) as DriverPayType[]).map((t) => (
+                  <option key={t} value={t}>{PAY_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+              {fieldErrors.payType && <span className="drivers__fieldError">{fieldErrors.payType}</span>}
+            </label>
+            <label className="drawer-form__field">
+              <span className="drawer-form__label drawer-form__label--required">Ставка</span>
+              <input
+                className="drawer-form__input"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="8"
+                value={form.payRate}
+                onChange={(e) => setForm((s) => ({ ...s, payRate: e.target.value }))}
+                onBlur={() => touchField('payRate')}
+              />
+              <span className="drawer-form__hint">{PAY_TYPE_UNITS[form.payType]}</span>
+              {fieldErrors.payRate && <span className="drivers__fieldError">{fieldErrors.payRate}</span>}
+            </label>
+          </div>
 
           <div className="drawer-form__section">Статус</div>
 

@@ -88,6 +88,11 @@
   font-size: 13px;
 }
 
+.drivers__fieldError {
+  font-size: 11px;
+  color: var(--danger);
+  margin-top: -1px;
+}
 .drivers__tableWrap {
   overflow: auto;
 }

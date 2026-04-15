@@ -7,7 +7,7 @@ import { createVehicleSchema, updateVehicleSchema, availabilitySchema } from '..
 import { asyncHandler } from '../utils/asyncHandler';
 import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
-import type { Prisma, VehicleType } from '@prisma/client';
+import type { Prisma, FuelType, VehicleType } from '@prisma/client';
 
 export const vehiclesRouter = express.Router();
 
@@ -16,6 +16,7 @@ vehiclesRouter.use(requireAuth);
 /* ─── helpers ─────────────────────────────────────────── */
 
 const VEHICLE_TYPES: VehicleType[] = ['TRUCK', 'VAN', 'CAR', 'REFRIGERATOR'];
+const FUEL_TYPES: FuelType[] = ['DIESEL', 'PETROL_95', 'PETROL_92', 'GAS'];
 
 function getCompanyId(req: Request) {
   return (req as AuthenticatedRequest).auth.company_id;
@@ -45,12 +46,33 @@ function parseSort(sortBy: unknown) {
   return 'plate_number';
 }
 
-function vehicleDto(v: { id: string; plate_number: string; type: VehicleType; capacity: number; is_available: boolean; notes: string | null; created_at: Date; updated_at: Date }) {
+function vehicleDto(v: {
+  id: string;
+  plate_number: string;
+  type: VehicleType;
+  capacity: number;
+  fuel_type: FuelType | null;
+  tank_capacity: number | null;
+  fuel_consumption: number | null;
+  cargo_volume: number | null;
+  cost_per_km: number | null;
+  max_range: number | null;
+  is_available: boolean;
+  notes: string | null;
+  created_at: Date;
+  updated_at: Date;
+}) {
   return {
     id: v.id,
     plateNumber: v.plate_number,
     type: v.type,
     capacity: v.capacity,
+    fuelType: v.fuel_type ?? undefined,
+    tankCapacity: v.tank_capacity ?? undefined,
+    fuelConsumption: v.fuel_consumption ?? undefined,
+    cargoVolume: v.cargo_volume ?? undefined,
+    costPerKm: v.cost_per_km ?? undefined,
+    maxRange: v.max_range ?? undefined,
     isAvailable: v.is_available,
     notes: v.notes ?? undefined,
     createdAt: v.created_at.toISOString(),
@@ -63,6 +85,12 @@ const vehicleSelect = {
   plate_number: true,
   type: true,
   capacity: true,
+  fuel_type: true,
+  tank_capacity: true,
+  fuel_consumption: true,
+  cargo_volume: true,
+  cost_per_km: true,
+  max_range: true,
   is_available: true,
   notes: true,
   created_at: true,
@@ -197,12 +225,31 @@ vehiclesRouter.post(
     const plateNumber = normalizeText(body.plateNumber ?? body.plate_number);
     const type = normalizeText(body.type) as VehicleType | null;
     const capacity = toFloat(body.capacity);
+    const fuelType = normalizeText(body.fuelType ?? body.fuel_type) as FuelType | null;
+    const tankCapacity = toFloat(body.tankCapacity ?? body.tank_capacity);
+    const fuelConsumption = toFloat(body.fuelConsumption ?? body.fuel_consumption);
+    const cargoVolume = toFloat(body.cargoVolume ?? body.cargo_volume);
+    const costPerKm = toFloat(body.costPerKm ?? body.cost_per_km);
+    const maxRange = toFloat(body.maxRange ?? body.max_range);
 
-    if (!plateNumber || !type || capacity === null) {
-      return fail(res, 400, 'plateNumber, type, capacity are required');
+    if (
+      !plateNumber ||
+      !type ||
+      capacity === null ||
+      !fuelType ||
+      tankCapacity === null ||
+      fuelConsumption === null ||
+      cargoVolume === null ||
+      costPerKm === null ||
+      maxRange === null
+    ) {
+      return fail(res, 400, 'plateNumber, type, capacity, fuelType, tankCapacity, fuelConsumption, cargoVolume, costPerKm, maxRange are required');
     }
     if (!VEHICLE_TYPES.includes(type)) {
       return fail(res, 400, `type must be one of: ${VEHICLE_TYPES.join(', ')}`);
+    }
+    if (!FUEL_TYPES.includes(fuelType)) {
+      return fail(res, 400, `fuelType must be one of: ${FUEL_TYPES.join(', ')}`);
     }
 
     const created = await prisma.vehicle.create({
@@ -210,6 +257,12 @@ vehiclesRouter.post(
         plate_number: plateNumber,
         type,
         capacity,
+        fuel_type: fuelType,
+        tank_capacity: tankCapacity,
+        fuel_consumption: fuelConsumption,
+        cargo_volume: cargoVolume,
+        cost_per_km: costPerKm,
+        max_range: maxRange,
         is_available: body.isAvailable !== false,
         notes: normalizeText(body.notes),
         company_id: companyId,
@@ -240,10 +293,19 @@ vehiclesRouter.put(
     const plateNumber = normalizeText(body.plateNumber ?? body.plate_number);
     const type = normalizeText(body.type) as VehicleType | null;
     const capacity = toFloat(body.capacity);
+    const fuelType = normalizeText(body.fuelType ?? body.fuel_type) as FuelType | null;
+    const tankCapacity = toFloat(body.tankCapacity ?? body.tank_capacity);
+    const fuelConsumption = toFloat(body.fuelConsumption ?? body.fuel_consumption);
+    const cargoVolume = toFloat(body.cargoVolume ?? body.cargo_volume);
+    const costPerKm = toFloat(body.costPerKm ?? body.cost_per_km);
+    const maxRange = toFloat(body.maxRange ?? body.max_range);
     const notes = normalizeText(body.notes);
 
     if (type && !VEHICLE_TYPES.includes(type)) {
       return fail(res, 400, `type must be one of: ${VEHICLE_TYPES.join(', ')}`);
+    }
+    if (fuelType && !FUEL_TYPES.includes(fuelType)) {
+      return fail(res, 400, `fuelType must be one of: ${FUEL_TYPES.join(', ')}`);
     }
 
     const updated = await prisma.vehicle.update({
@@ -252,6 +314,12 @@ vehiclesRouter.put(
         ...(plateNumber ? { plate_number: plateNumber } : {}),
         ...(type ? { type } : {}),
         ...(capacity !== null ? { capacity } : {}),
+        ...(fuelType ? { fuel_type: fuelType } : {}),
+        ...(tankCapacity !== null ? { tank_capacity: tankCapacity } : {}),
+        ...(fuelConsumption !== null ? { fuel_consumption: fuelConsumption } : {}),
+        ...(cargoVolume !== null ? { cargo_volume: cargoVolume } : {}),
+        ...(costPerKm !== null ? { cost_per_km: costPerKm } : {}),
+        ...(maxRange !== null ? { max_range: maxRange } : {}),
         ...(typeof body.isAvailable === 'boolean' ? { is_available: body.isAvailable } : {}),
         ...(body.notes === null ? { notes: null } : notes ? { notes } : {}),
       },

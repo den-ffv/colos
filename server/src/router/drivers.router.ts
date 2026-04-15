@@ -7,7 +7,7 @@ import { createDriverSchema, updateDriverSchema, availabilitySchema } from '../s
 import { asyncHandler } from '../utils/asyncHandler';
 import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
-import type { Prisma } from '@prisma/client';
+import type { DriverPayType, Prisma } from '@prisma/client';
 
 export const driversRouter = express.Router();
 
@@ -24,6 +24,14 @@ function normalizeText(value: unknown): string | null {
   const s = value.trim();
   return s || null;
 }
+
+function toFloat(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+const PAY_TYPES: DriverPayType[] = ['PER_KM', 'PER_HOUR', 'PER_DAY', 'FIXED'];
 
 function parseSort(sortBy: unknown) {
   const v = typeof sortBy === 'string' ? sortBy : '';
@@ -44,6 +52,8 @@ function driverDto(d: {
   last_name: string;
   phone: string;
   license_number: string;
+  pay_type: DriverPayType;
+  pay_rate: number | null;
   is_available: boolean;
   notes: string | null;
   created_at: Date;
@@ -55,6 +65,8 @@ function driverDto(d: {
     lastName: d.last_name,
     phone: d.phone,
     licenseNumber: d.license_number,
+    payType: d.pay_type,
+    payRate: d.pay_rate ?? undefined,
     isAvailable: d.is_available,
     notes: d.notes ?? undefined,
     createdAt: d.created_at.toISOString(),
@@ -68,6 +80,8 @@ const driverSelect = {
   last_name: true,
   phone: true,
   license_number: true,
+  pay_type: true,
+  pay_rate: true,
   is_available: true,
   notes: true,
   created_at: true,
@@ -203,9 +217,14 @@ driversRouter.post(
     const lastName = normalizeText(body.lastName ?? body.last_name);
     const phone = normalizeText(body.phone);
     const licenseNumber = normalizeText(body.licenseNumber ?? body.license_number);
+    const payType = normalizeText(body.payType ?? body.pay_type) as DriverPayType | null;
+    const payRate = toFloat(body.payRate ?? body.pay_rate);
 
-    if (!firstName || !lastName || !phone || !licenseNumber) {
-      return fail(res, 400, 'firstName, lastName, phone, licenseNumber are required');
+    if (!firstName || !lastName || !phone || !licenseNumber || !payType || payRate === null) {
+      return fail(res, 400, 'firstName, lastName, phone, licenseNumber, payType, payRate are required');
+    }
+    if (!PAY_TYPES.includes(payType)) {
+      return fail(res, 400, `payType must be one of: ${PAY_TYPES.join(', ')}`);
     }
 
     const created = await prisma.driver.create({
@@ -214,6 +233,8 @@ driversRouter.post(
         last_name: lastName,
         phone,
         license_number: licenseNumber,
+        pay_type: payType,
+        pay_rate: payRate,
         is_available: body.isAvailable !== false,
         notes: normalizeText(body.notes),
         company_id: companyId,
@@ -245,7 +266,13 @@ driversRouter.put(
     const lastName = normalizeText(body.lastName ?? body.last_name);
     const phone = normalizeText(body.phone);
     const licenseNumber = normalizeText(body.licenseNumber ?? body.license_number);
+    const payType = normalizeText(body.payType ?? body.pay_type) as DriverPayType | null;
+    const payRate = toFloat(body.payRate ?? body.pay_rate);
     const notes = normalizeText(body.notes);
+
+    if (payType && !PAY_TYPES.includes(payType)) {
+      return fail(res, 400, `payType must be one of: ${PAY_TYPES.join(', ')}`);
+    }
 
     const updated = await prisma.driver.update({
       where: { id: req.params.id },
@@ -254,6 +281,8 @@ driversRouter.put(
         ...(lastName ? { last_name: lastName } : {}),
         ...(phone ? { phone } : {}),
         ...(licenseNumber ? { license_number: licenseNumber } : {}),
+        ...(payType ? { pay_type: payType } : {}),
+        ...(payRate !== null ? { pay_rate: payRate } : {}),
         ...(typeof body.isAvailable === 'boolean' ? { is_available: body.isAvailable } : {}),
         ...(body.notes === null ? { notes: null } : notes ? { notes } : {}),
       },

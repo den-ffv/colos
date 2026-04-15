@@ -3,6 +3,8 @@ import { z } from 'zod';
 /* ─── shared ───────────────────────────────────────────── */
 
 const vehicleTypeEnum = z.enum(['TRUCK', 'VAN', 'CAR', 'REFRIGERATOR']);
+const driverPayTypeEnum = z.enum(['PER_KM', 'PER_HOUR', 'PER_DAY', 'FIXED']);
+const fuelTypeEnum = z.enum(['DIESEL', 'PETROL_95', 'PETROL_92', 'GAS']);
 const orderStatusEnum = z.enum(['NEW', 'CONFIRMED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED']);
 const executionTypeEnum = z.enum(['INTERNAL', 'EXTERNAL']);
 
@@ -63,20 +65,27 @@ export const updateClientSchema = createClientSchema.partial();
 
 /* ─── drivers ──────────────────────────────────────────── */
 
-export const createDriverSchema = z.object({
-  firstName: z.string().min(1).optional(),
-  first_name: z.string().min(1).optional(),
-  lastName: z.string().min(1).optional(),
-  last_name: z.string().min(1).optional(),
-  phone: z.string().min(1, 'Phone is required'),
-  licenseNumber: z.string().min(1).optional(),
-  license_number: z.string().min(1).optional(),
-  isAvailable: z.boolean().optional(),
-  notes: z.string().nullable().optional(),
-}).refine(
-  (d) => (d.firstName || d.first_name) && (d.lastName || d.last_name) && (d.licenseNumber || d.license_number),
-  { message: 'firstName, lastName, licenseNumber are required' },
-);
+export const createDriverSchema = z
+  .object({
+    firstName: z.string().min(1).optional(),
+    first_name: z.string().min(1).optional(),
+    lastName: z.string().min(1).optional(),
+    last_name: z.string().min(1).optional(),
+    phone: z.string().min(1, 'Phone is required'),
+    licenseNumber: z.string().min(1).optional(),
+    license_number: z.string().min(1).optional(),
+    payType: driverPayTypeEnum.optional(),
+    pay_type: driverPayTypeEnum.optional(),
+    payRate: z.number().positive('Pay rate must be positive').optional(),
+    pay_rate: z.number().positive().optional(),
+    isAvailable: z.boolean().optional(),
+    notes: z.string().nullable().optional(),
+  })
+  .refine((d) => (d.firstName || d.first_name) && (d.lastName || d.last_name) && (d.licenseNumber || d.license_number), {
+    message: 'firstName, lastName, licenseNumber are required',
+  })
+  .refine((d) => d.payType || d.pay_type, { message: 'payType is required' })
+  .refine((d) => d.payRate !== undefined || d.pay_rate !== undefined, { message: 'payRate is required' });
 
 export const updateDriverSchema = z.object({
   firstName: z.string().min(1).optional(),
@@ -86,6 +95,10 @@ export const updateDriverSchema = z.object({
   phone: z.string().min(1).optional(),
   licenseNumber: z.string().min(1).optional(),
   license_number: z.string().min(1).optional(),
+  payType: driverPayTypeEnum.optional(),
+  pay_type: driverPayTypeEnum.optional(),
+  payRate: z.number().positive().optional(),
+  pay_rate: z.number().positive().optional(),
   isAvailable: z.boolean().optional(),
   notes: z.string().nullable().optional(),
 });
@@ -96,20 +109,52 @@ export const availabilitySchema = z.object({
 
 /* ─── vehicles ─────────────────────────────────────────── */
 
-export const createVehicleSchema = z.object({
-  plateNumber: z.string().min(1, 'Plate number is required').optional(),
-  plate_number: z.string().min(1).optional(),
-  type: vehicleTypeEnum,
-  capacity: z.number().positive('Capacity must be positive'),
-  isAvailable: z.boolean().optional(),
-  notes: z.string().nullable().optional(),
-}).refine((d) => d.plateNumber || d.plate_number, { message: 'plateNumber is required' });
+export const createVehicleSchema = z
+  .object({
+    plateNumber: z.string().min(1, 'Plate number is required').optional(),
+    plate_number: z.string().min(1).optional(),
+    type: vehicleTypeEnum,
+    capacity: z.number().positive('Capacity must be positive'),
+    fuelType: fuelTypeEnum.optional(),
+    fuel_type: fuelTypeEnum.optional(),
+    tankCapacity: z.number().positive('Tank capacity must be positive').optional(),
+    tank_capacity: z.number().positive().optional(),
+    fuelConsumption: z.number().positive('Fuel consumption must be positive').optional(),
+    fuel_consumption: z.number().positive().optional(),
+    cargoVolume: z.number().positive('Cargo volume must be positive').optional(),
+    cargo_volume: z.number().positive().optional(),
+    costPerKm: z.number().min(0, 'Cost per km must be >= 0').optional(),
+    cost_per_km: z.number().min(0).optional(),
+    maxRange: z.number().positive('Max range must be positive').optional(),
+    max_range: z.number().positive().optional(),
+    isAvailable: z.boolean().optional(),
+    notes: z.string().nullable().optional(),
+  })
+  .refine((d) => d.plateNumber || d.plate_number, { message: 'plateNumber is required' })
+  .refine((d) => d.fuelType || d.fuel_type, { message: 'fuelType is required' })
+  .refine((d) => d.tankCapacity !== undefined || d.tank_capacity !== undefined, { message: 'tankCapacity is required' })
+  .refine((d) => d.fuelConsumption !== undefined || d.fuel_consumption !== undefined, { message: 'fuelConsumption is required' })
+  .refine((d) => d.cargoVolume !== undefined || d.cargo_volume !== undefined, { message: 'cargoVolume is required' })
+  .refine((d) => d.costPerKm !== undefined || d.cost_per_km !== undefined, { message: 'costPerKm is required' })
+  .refine((d) => d.maxRange !== undefined || d.max_range !== undefined, { message: 'maxRange is required' });
 
 export const updateVehicleSchema = z.object({
   plateNumber: z.string().min(1).optional(),
   plate_number: z.string().min(1).optional(),
   type: vehicleTypeEnum.optional(),
   capacity: z.number().positive().optional(),
+  fuelType: fuelTypeEnum.optional(),
+  fuel_type: fuelTypeEnum.optional(),
+  tankCapacity: z.number().positive().optional(),
+  tank_capacity: z.number().positive().optional(),
+  fuelConsumption: z.number().positive().optional(),
+  fuel_consumption: z.number().positive().optional(),
+  cargoVolume: z.number().positive().optional(),
+  cargo_volume: z.number().positive().optional(),
+  costPerKm: z.number().min(0).optional(),
+  cost_per_km: z.number().min(0).optional(),
+  maxRange: z.number().positive().optional(),
+  max_range: z.number().positive().optional(),
   isAvailable: z.boolean().optional(),
   notes: z.string().nullable().optional(),
 });
