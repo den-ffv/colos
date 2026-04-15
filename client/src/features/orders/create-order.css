@@ -96,7 +96,7 @@
 .co__section {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
@@ -111,12 +111,12 @@
 }
 
 .co__sectionNum {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-xs);
   background: var(--accent);
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -140,9 +140,11 @@
 }
 
 .co__label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--muted);
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -196,7 +198,7 @@
 }
 
 .co__select:hover {
-  border-color: color-mix(in srgb, var(--border) 60%, var(--accent));
+  border-color: var(--border-2);
 }
 
 .co__select:focus {

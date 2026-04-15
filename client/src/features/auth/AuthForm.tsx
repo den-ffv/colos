@@ -1,4 +1,5 @@
 import { type FormEvent, useMemo, useState } from 'react';
+import { DeliveryTruck01Icon } from 'hugeicons-react';
 import { apiPostJson, type ApiError } from '../../lib/api';
 import { getApiBaseUrl } from '../../lib/env';
 import { clearAuthTokens, getAuthTokens, setAuthTokens, type AuthTokens } from './auth.storage';
@@ -90,9 +91,16 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
 
   return (
     <div className="auth">
+      <div className="auth__inner">
+      <div className="auth__logo">
+        <div className="auth__logoIcon">
+          <DeliveryTruck01Icon size={18} strokeWidth={2} />
+        </div>
+        <span className="auth__logoName">Colos</span>
+      </div>
       <header className="auth__header">
-        <h1 className="auth__title">Colos CRM</h1>
-        <p className="auth__subtitle">Авторизація</p>
+        <h1 className="auth__title">{mode === 'signin' ? 'Вхід до системи' : 'Реєстрація'}</h1>
+        <p className="auth__subtitle">Logistics CRM Platform</p>
       </header>
 
       <section className="ui-card auth__card">
@@ -205,6 +213,7 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
       <footer className="auth__footer">
         <span className="auth__hint">Поки що бекенд auth-ендпоїнти можуть бути заглушками.</span>
       </footer>
+      </div>
     </div>
   );
 }

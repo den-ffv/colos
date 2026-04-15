@@ -26,17 +26,17 @@
 }
 
 .csel__trigger:hover {
-  border-color: color-mix(in srgb, var(--border) 60%, var(--accent));
+  border-color: var(--border-2);
 }
 
 .csel__trigger--open {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(38, 110, 243, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
 }
 
 .csel__trigger--warn {
-  border-color: #f59e0b;
-  background-color: rgba(245, 158, 11, 0.05);
+  border-color: var(--warning);
+  background-color: var(--warning-light);
 }
 
 .csel__val {
@@ -56,13 +56,15 @@
 
 .csel__triggerBadge {
   flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: #92400e;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
-  border-radius: 999px;
-  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--warning);
+  background: var(--warning-light);
+  border: 1px solid rgba(217, 119, 6, 0.3);
+  border-radius: var(--radius-xs);
+  padding: 1px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .csel__arrow {
@@ -85,8 +87,8 @@
   z-index: 50;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
   max-height: 260px;
   overflow-y: auto;
@@ -120,21 +122,21 @@
 }
 
 .csel__option--active {
-  background: rgba(38, 110, 243, 0.06);
+  background: var(--accent-light);
   color: var(--accent);
   font-weight: 600;
 }
 
 .csel__option--active:hover {
-  background: rgba(38, 110, 243, 0.10);
+  background: var(--accent-light);
 }
 
 .csel__option--warn {
-  background: rgba(245, 158, 11, 0.05);
+  background: var(--warning-light);
 }
 
 .csel__option--warn:hover:not(:disabled) {
-  background: rgba(245, 158, 11, 0.10);
+  background: var(--warning-light);
 }
 
 .csel__option--disabled {
@@ -167,13 +169,15 @@
 
 .csel__optBadge {
   flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: #92400e;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
-  border-radius: 999px;
-  padding: 1px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--warning);
+  background: var(--warning-light);
+  border: 1px solid rgba(217, 119, 6, 0.3);
+  border-radius: var(--radius-xs);
+  padding: 1px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .csel__check {

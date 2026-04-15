@@ -1,4 +1,4 @@
-/* ─── Driver Portal ──────────────────────────────────────── */
+/* ─── Driver Portal ──────────────────────────────────── */
 
 .dp {
   display: flex;
@@ -18,20 +18,21 @@
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.3px;
+  color: var(--text);
 }
 
 .dp__sub {
   margin: 2px 0 0;
-  font-size: 13px;
+  font-size: 11.5px;
   color: var(--muted);
 }
 
-/* ── Stats strip ──────────────────────────────────────────── */
+/* ── Stats strip ──────────────────────────────────────── */
 
 .dp__stats {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -39,41 +40,45 @@
   flex: 1;
   min-width: 100px;
   padding: 14px 18px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .dp__statVal {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.5px;
   color: var(--text);
 }
 
 .dp__statVal--active {
-  color: #f59e0b;
+  color: var(--warning);
 }
 
 .dp__statLbl {
-  font-size: 12px;
+  font-size: 10.5px;
+  font-weight: 700;
   color: var(--muted);
-  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
 }
 
-/* ── Grid ─────────────────────────────────────────────────── */
+/* ── Grid ─────────────────────────────────────────────── */
 
 .dp__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 14px;
 }
 
 @media (max-width: 900px) {
   .dp__grid { grid-template-columns: 1fr; }
 }
 
-/* ── Table ────────────────────────────────────────────────── */
+/* ── Table ────────────────────────────────────────────── */
 
 .dp__tableWrap {
   overflow-x: auto;
@@ -101,47 +106,52 @@
 }
 
 .dp__pageInfo {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--muted);
 }
 
-/* ── Detail ───────────────────────────────────────────────── */
+/* ── Detail ───────────────────────────────────────────── */
 
 .dp__detail {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 
 .dp__action {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .dp__kv {
-  display: flex;
+  display: grid;
+  grid-template-columns: 110px 1fr;
   gap: 12px;
-  padding: 6px 0;
+  padding: 7px 0;
   border-bottom: 1px solid var(--border);
-  font-size: 13px;
+  align-items: center;
+}
+
+.dp__kv:last-of-type {
+  border-bottom: none;
 }
 
 .dp__k {
-  width: 110px;
-  flex-shrink: 0;
-  color: var(--muted);
+  font-size: 11.5px;
   font-weight: 500;
+  color: var(--muted);
 }
 
 .dp__v {
-  flex: 1;
+  font-size: 13px;
   color: var(--text);
+  font-weight: 500;
   word-break: break-word;
 }
 
-/* ── Misc ─────────────────────────────────────────────────── */
+/* ── Misc ─────────────────────────────────────────────── */
 
 .dp__empty {
   padding: 32px;
@@ -153,9 +163,9 @@
 .dp__error {
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-  background: var(--error-subtle, #fef2f2);
-  color: var(--error, #dc2626);
-  border: 1px solid var(--error-border, #fca5a5);
+  background: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid rgba(220, 38, 38, 0.25);
   font-size: 13px;
 }
 
