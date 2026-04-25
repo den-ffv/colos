@@ -9,6 +9,7 @@ import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
 import { emitOrderStatusChanged, emitOrderUpdated } from '../services/socket';
 import { generateOrderPdf } from '../services/pdf.service';
+import { sendDriverAssigned } from '../services/email.service';
 import type { Prisma, OrderStatus, ExecutionType } from '@prisma/client';
 
 export const ordersRouter = express.Router();
@@ -674,6 +675,27 @@ ordersRouter.patch(
       newStatus: finalStatus,
       previousStatus: existing.status,
     });
+
+    // Send driver email when order is confirmed
+    if (newStatus === 'CONFIRMED') {
+      prisma.driver.findFirst({
+        where: { id: updated.driver_id ?? '', company_id: companyId },
+        select: { first_name: true, last_name: true, user: { select: { email: true } } },
+      }).then((driver) => {
+        if (!driver?.user?.email) return;
+        sendDriverAssigned({
+          to: driver.user.email,
+          driverName: `${driver.first_name} ${driver.last_name}`,
+          contractNumber: updated.order_number,
+          pickupAddress: updated.pickup_address,
+          deliveryAddress: updated.delivery_address,
+          pickupDate: updated.pickup_date.toLocaleString('uk-UA', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+          }),
+        }).catch((err: unknown) => console.error('[EMAIL] sendDriverAssigned failed:', err));
+      }).catch((err: unknown) => console.error('[EMAIL] driver lookup failed:', err));
+    }
 
     return ok(res, orderDto(updated));
   }),
