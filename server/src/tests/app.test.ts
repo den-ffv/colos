@@ -279,14 +279,12 @@ describe('GET /api/orders/lookups', () => {
   });
 
   it('повертає payRate та payType для водіїв', async () => {
-    // Мокуємо автентифікацію
-    (prisma.user.findUnique as MockedFn).mockResolvedValue({
-      ...mockUser,
-      UserRoles: [{ role: 'ADMIN' }],
-      user_roles: [{ role: 'ADMIN' }],
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['ADMIN'],
     });
-
-    const token = signAccessToken({ userId: mockUser.id, companyId: mockUser.company_id, roles: ['ADMIN'] });
 
     // Мокуємо відповіді lookups
     (prisma.client.findMany as MockedFn).mockResolvedValue([]);
