@@ -77,6 +77,7 @@ model Company {
   Vehicles Vehicle[]
   Carriers Carrier[]
   Orders   Order[]
+  Invoices Invoice[]
 
   @@map("companies")
 }
@@ -265,6 +266,8 @@ model Order {
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
 
+  invoices Invoice[]
+
   @@map("orders")
 }
 
@@ -298,4 +301,32 @@ model FuelPrice {
   @@index([fuel_type])
   @@index([fetched_at])
   @@map("fuel_prices")
+}
+
+enum InvoiceType {
+  PREPAYMENT
+  FINAL
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+}
+
+model Invoice {
+  id         String        @id @default(uuid())
+  order_id   String
+  order      Order         @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  company_id String
+  company    Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  type       InvoiceType
+  status     InvoiceStatus @default(PENDING)
+  amount     Float
+  sent_at    DateTime?
+  paid_at    DateTime?
+  created_at DateTime      @default(now())
+  updated_at DateTime      @updatedAt
+
+  @@index([order_id])
+  @@map("invoices")
 }
