@@ -254,6 +254,7 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
 
   /* ── auto-calc salary cost ──────────────────────────── */
   useEffect(() => {
+    if (isEdit) return
     if (form.executionType !== 'INTERNAL') { setSalaryCalcNote(null); return }
     if (!form.driverId) {
       setForm((s) => ({ ...s, estimatedSalaryCost: '' }))
