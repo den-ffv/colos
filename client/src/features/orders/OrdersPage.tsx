@@ -17,7 +17,11 @@ import './orders.css'
 
 /* ─── types ───────────────────────────────────────────── */
 
-type OrderStatus = 'NEW' | 'CONFIRMED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED'
+type OrderStatus =
+  | 'NEW' | 'CONFIRMED' | 'DRIVER_ACCEPTED'
+  | 'AWAITING_PREPAYMENT' | 'PREPAID'
+  | 'IN_TRANSIT' | 'DELIVERED'
+  | 'AWAITING_FINAL_PAYMENT' | 'COMPLETED' | 'CANCELLED'
 type ExecutionType = 'INTERNAL' | 'EXTERNAL'
 
 type OrderListItem = {
@@ -75,6 +79,11 @@ type OrderDetail = {
   margin: number
   marginPercent: number
   clientPaid: boolean
+  prepaidAmount?: number
+  prepaidAt?: string
+  finalPaidAmount?: number
+  finalPaidAt?: string
+  totalPaid: number
   assignedManagerId: string
   assignedManager?: { id: string; name: string; email: string }
   notes?: string
@@ -98,27 +107,43 @@ type Pagination = { page: number; limit: number; total: number; totalPages: numb
 /* ─── constants ───────────────────────────────────────── */
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
-  NEW: 'Новий',
-  CONFIRMED: 'Підтверджений',
-  IN_TRANSIT: 'В дорозі',
-  DELIVERED: 'Доставлений',
-  CANCELLED: 'Скасований',
+  NEW:                    'Новий',
+  CONFIRMED:              'Підтверджений',
+  DRIVER_ACCEPTED:        'Водій прийняв',
+  AWAITING_PREPAYMENT:    'Очікує авансу',
+  PREPAID:                'Аванс оплачено',
+  IN_TRANSIT:             'В дорозі',
+  DELIVERED:              'Доставлений',
+  AWAITING_FINAL_PAYMENT: 'Очікує доплати',
+  COMPLETED:              'Завершений',
+  CANCELLED:              'Скасований',
 }
 
 const STATUS_BADGE: Record<OrderStatus, 'accent' | 'neutral' | 'warning' | 'success' | 'danger'> = {
-  NEW: 'accent',
-  CONFIRMED: 'neutral',
-  IN_TRANSIT: 'warning',
-  DELIVERED: 'success',
-  CANCELLED: 'danger',
+  NEW:                    'accent',
+  CONFIRMED:              'neutral',
+  DRIVER_ACCEPTED:        'neutral',
+  AWAITING_PREPAYMENT:    'warning',
+  PREPAID:                'warning',
+  IN_TRANSIT:             'warning',
+  DELIVERED:              'success',
+  AWAITING_FINAL_PAYMENT: 'warning',
+  COMPLETED:              'success',
+  CANCELLED:              'danger',
 }
 
+// Ручні переходи через кнопку (тільки для ADMIN/LOGIST)
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  NEW: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['IN_TRANSIT', 'CANCELLED'],
-  IN_TRANSIT: ['DELIVERED', 'CANCELLED'],
-  DELIVERED: [],
-  CANCELLED: [],
+  NEW:                    ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED:              ['CANCELLED'],
+  DRIVER_ACCEPTED:        ['AWAITING_PREPAYMENT', 'CANCELLED'],
+  AWAITING_PREPAYMENT:    ['CANCELLED'],
+  PREPAID:                ['CANCELLED'],
+  IN_TRANSIT:             ['CANCELLED'],
+  DELIVERED:              [],
+  AWAITING_FINAL_PAYMENT: [],
+  COMPLETED:              [],
+  CANCELLED:              [],
 }
 
 const EXEC_LABELS: Record<ExecutionType, string> = {
@@ -318,6 +343,13 @@ export function OrdersPage({
   /* ─── lookups ────────────────── */
   const [lookups, setLookups] = useState<Lookups | null>(null)
 
+  // Payment modals
+  const [paymentModal, setPaymentModal] = useState<'prepaid' | 'final' | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [paymentTargetId, setPaymentTargetId] = useState<string | null>(null)
+
   /* ─── query string ───────────── */
   const query = useMemo(() => {
     const p = new URLSearchParams()
@@ -481,6 +513,62 @@ export function OrdersPage({
       }
     } catch {
       setDetailsError('Не вдалося змінити статус')
+    }
+  }
+
+  /* ─── payment actions ────────── */
+
+  async function requestPrepayment(orderId: string) {
+    try {
+      const res = await apiPostJson<ApiResponse<OrderDetail>>(
+        `/api/orders/${orderId}/request-prepayment`,
+        {},
+        { headers: authHeaders },
+      )
+      if (isSuccess(res)) { setDetails(res.data); void loadList() }
+    } catch (err) {
+      const e = err as Partial<ApiError>
+      if (e.status === 401) onUnauthorized()
+      setDetailsError(e.message ?? 'Помилка')
+    }
+  }
+
+  function openMarkPrepaid(order: OrderDetail) {
+    setPaymentTargetId(order.id)
+    setPaymentModal('prepaid')
+    setPaymentAmount('')
+    setPaymentError(null)
+  }
+
+  function openMarkFinalPaid(order: OrderDetail) {
+    setPaymentTargetId(order.id)
+    setPaymentModal('final')
+    setPaymentAmount('')
+    setPaymentError(null)
+  }
+
+  async function submitPayment() {
+    const amount = parseFloat(paymentAmount)
+    if (!amount || amount <= 0) { setPaymentError('Введіть суму більше 0'); return }
+    if (!paymentTargetId || !paymentModal) return
+    setPaymentSubmitting(true)
+    setPaymentError(null)
+    try {
+      const endpoint = paymentModal === 'prepaid'
+        ? `/api/orders/${paymentTargetId}/mark-prepaid`
+        : `/api/orders/${paymentTargetId}/mark-final-paid`
+      const res = await apiPostJson<ApiResponse<OrderDetail>>(endpoint, { amount }, { headers: authHeaders })
+      if (isSuccess(res)) {
+        setDetails(res.data)
+        void loadList()
+        setPaymentModal(null)
+      }
+    } catch (err) {
+      const e = err as Partial<ApiError>
+      if (e.status === 401) onUnauthorized()
+      setPaymentError(e.message ?? 'Помилка збереження')
+    } finally {
+      setPaymentSubmitting(false)
     }
   }
 
@@ -653,7 +741,8 @@ export function OrdersPage({
     setForm((s) => ({ ...s, [key]: value }))
   }
 
-  const isFinished = details?.status === 'DELIVERED' || details?.status === 'CANCELLED'
+  const isFinished = details?.status === 'COMPLETED' || details?.status === 'CANCELLED'
+  const canManagePayments = roles.includes('ADMIN') || roles.includes('LOGIST')
 
   /* ─── JSX ───────────────────────────────────────────── */
 
@@ -805,11 +894,28 @@ export function OrdersPage({
             {/* status bar */}
             <div className="orders__statusBar">
               <span style={{ marginRight: 8 }}>Статус: {renderStatusBadge(details.status)}</span>
+              {/* Звичайні переходи статусів */}
               {STATUS_TRANSITIONS[details.status].map((next) => (
                 <Button key={next} size="sm" variant={next === 'CANCELLED' ? 'ghost' : 'primary'} onClick={() => void changeStatus(next)}>
                   → {STATUS_LABELS[next]}
                 </Button>
               ))}
+              {/* Спеціальні дії для ADMIN/LOGIST */}
+              {canManagePayments && details.status === 'DRIVER_ACCEPTED' && (
+                <Button size="sm" variant="primary" onClick={() => void requestPrepayment(details.id)}>
+                  Запросити аванс
+                </Button>
+              )}
+              {canManagePayments && details.status === 'AWAITING_PREPAYMENT' && (
+                <Button size="sm" variant="primary" onClick={() => void openMarkPrepaid(details)}>
+                  Зафіксувати аванс
+                </Button>
+              )}
+              {canManagePayments && details.status === 'AWAITING_FINAL_PAYMENT' && (
+                <Button size="sm" variant="primary" onClick={() => void openMarkFinalPaid(details)}>
+                  Зафіксувати оплату
+                </Button>
+              )}
             </div>
 
             {/* general */}
@@ -876,6 +982,28 @@ export function OrdersPage({
                   v={
                     <span className={`orders__paid orders__paid--${details.clientPaid ? 'yes' : 'no'}`}>
                       {details.clientPaid ? 'Оплачено' : 'Не оплачено'}
+                    </span>
+                  }
+                />
+              </>
+            )}
+
+            {/* payments panel */}
+            {canSeeFinance && (details.prepaidAmount != null || details.finalPaidAmount != null || details.totalPaid > 0) && (
+              <>
+                <div className="orders__section">Оплати</div>
+                {details.prepaidAmount != null && (
+                  <KV k="Аванс" v={`${money(details.prepaidAmount)} ₴${details.prepaidAt ? ` · ${formatDate(details.prepaidAt)}` : ''}`} />
+                )}
+                {details.finalPaidAmount != null && (
+                  <KV k="Фінальна оплата" v={`${money(details.finalPaidAmount)} ₴${details.finalPaidAt ? ` · ${formatDate(details.finalPaidAt)}` : ''}`} />
+                )}
+                <KV k="Всього сплачено" v={`${money(details.totalPaid)} ₴`} />
+                <KV
+                  k="Залишок"
+                  v={
+                    <span style={{ color: details.clientPrice - details.totalPaid > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                      {money(Math.max(0, details.clientPrice - details.totalPaid))} ₴
                     </span>
                   }
                 />
@@ -1098,6 +1226,42 @@ export function OrdersPage({
           </label>
         </div>
       </Drawer>
+
+      {/* ── payment amount modal ── */}
+      {paymentModal && (
+        <div className="ui-modal__overlay" onMouseDown={() => setPaymentModal(null)}>
+          <div className="ui-modal ui-card" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div className="ui-modal__head">
+              <div className="ui-modal__title">
+                {paymentModal === 'prepaid' ? 'Зафіксувати аванс' : 'Зафіксувати фінальну оплату'}
+              </div>
+            </div>
+            <div className="ui-modal__body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {paymentError && <div className="orders__error">{paymentError}</div>}
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-2)', letterSpacing: '0.3px' }}>
+                  Сума (₴) *
+                </span>
+                <input
+                  className="ui-input"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  autoFocus
+                />
+              </label>
+            </div>
+            <div className="ui-modal__footer" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <Button variant="secondary" size="sm" onClick={() => setPaymentModal(null)}>Скасувати</Button>
+              <Button variant="primary" size="sm" disabled={paymentSubmitting} onClick={() => void submitPayment()}>
+                {paymentSubmitting ? '…' : 'Зберегти'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

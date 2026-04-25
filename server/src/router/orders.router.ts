@@ -43,16 +43,25 @@ function toDatetime(v: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-const ORDER_STATUSES: OrderStatus[] = ['NEW', 'CONFIRMED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'];
+const ORDER_STATUSES: OrderStatus[] = [
+  'NEW', 'CONFIRMED', 'DRIVER_ACCEPTED', 'AWAITING_PREPAYMENT',
+  'PREPAID', 'IN_TRANSIT', 'DELIVERED', 'AWAITING_FINAL_PAYMENT',
+  'COMPLETED', 'CANCELLED',
+];
 const EXECUTION_TYPES: ExecutionType[] = ['INTERNAL', 'EXTERNAL'];
 
-/** Allowed status transitions */
+/** Allowed status transitions (via PATCH /status — manual role-based) */
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  NEW: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['IN_TRANSIT', 'CANCELLED'],
-  IN_TRANSIT: ['DELIVERED', 'CANCELLED'],
-  DELIVERED: [],
-  CANCELLED: [],
+  NEW:                    ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED:              ['CANCELLED'],
+  DRIVER_ACCEPTED:        ['CANCELLED'],
+  AWAITING_PREPAYMENT:    ['CANCELLED'],
+  PREPAID:                ['IN_TRANSIT', 'CANCELLED'],
+  IN_TRANSIT:             ['CANCELLED'],
+  DELIVERED:              [],
+  AWAITING_FINAL_PAYMENT: [],
+  COMPLETED:              [],
+  CANCELLED:              [],
 };
 
 function parseSort(sortBy: unknown) {
@@ -142,6 +151,11 @@ const orderSelect = {
   margin: true,
   margin_percent: true,
   client_paid: true,
+  prepaid_amount: true,
+  prepaid_at: true,
+  final_paid_amount: true,
+  final_paid_at: true,
+  total_paid: true,
   assigned_manager_id: true,
   assigned_manager: { select: { id: true, first_name: true, last_name: true, email: true } },
   notes: true,
@@ -187,6 +201,11 @@ function orderDto(o: OrderRow) {
     margin: o.margin,
     marginPercent: o.margin_percent,
     clientPaid: o.client_paid,
+    prepaidAmount: o.prepaid_amount ?? undefined,
+    prepaidAt: o.prepaid_at?.toISOString() ?? undefined,
+    finalPaidAmount: o.final_paid_amount ?? undefined,
+    finalPaidAt: o.final_paid_at?.toISOString() ?? undefined,
+    totalPaid: o.total_paid,
     assignedManagerId: o.assigned_manager_id,
     assignedManager: o.assigned_manager
       ? {
@@ -625,10 +644,30 @@ ordersRouter.patch(
       return fail(res, 400, `Cannot transition from ${existing.status} to ${newStatus}`);
     }
 
+    // DRIVER: PREPAID → IN_TRANSIT; IN_TRANSIT → DELIVERED auto-transitions to AWAITING_FINAL_PAYMENT
+    const isDriverOnly = auth.roles.includes('DRIVER') && !auth.roles.includes('ADMIN') && !auth.roles.includes('LOGIST');
+    if (isDriverOnly) {
+      const driverAllowed: Partial<Record<OrderStatus, OrderStatus>> = {
+        PREPAID: 'IN_TRANSIT',
+        IN_TRANSIT: 'DELIVERED',
+      };
+      if (!driverAllowed[existing.status] || driverAllowed[existing.status] !== newStatus) {
+        return fail(res, 403, 'As a driver you can only move PREPAID→IN_TRANSIT or IN_TRANSIT→DELIVERED');
+      }
+    } else {
+      const allowed = STATUS_TRANSITIONS[existing.status];
+      if (!allowed.includes(newStatus)) {
+        return fail(res, 400, `Cannot transition from ${existing.status} to ${newStatus}`);
+      }
+    }
+
+    // When DELIVERED, automatically move to AWAITING_FINAL_PAYMENT
+    const finalStatus: OrderStatus = newStatus === 'DELIVERED' ? 'AWAITING_FINAL_PAYMENT' : newStatus;
+
     const updated = await prisma.order.update({
       where: { id: req.params.id },
       data: {
-        status: newStatus,
+        status: finalStatus,
         ...(newStatus === 'DELIVERED' ? { delivery_date: new Date() } : {}),
       },
       select: orderSelect,
@@ -637,8 +676,170 @@ ordersRouter.patch(
     emitOrderStatusChanged(companyId, {
       orderId: updated.id,
       orderNumber: updated.order_number,
-      newStatus,
+      newStatus: finalStatus,
       previousStatus: existing.status,
+    });
+
+    return ok(res, orderDto(updated));
+  }),
+);
+
+/* ─── POST /:id/accept – DRIVER приймає договір ──────── */
+
+ordersRouter.post(
+  '/:id/accept',
+  authorize(['DRIVER', 'ADMIN', 'LOGIST']),
+  asyncHandler(async (req: Request, res: Response) => {
+    const auth = (req as AuthenticatedRequest).auth;
+    const companyId = auth.company_id;
+
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      select: { id: true, status: true, driver_id: true },
+    });
+    if (!order) return fail(res, 404, 'Order not found');
+    if (order.status !== 'CONFIRMED') return fail(res, 400, `Cannot accept order with status ${order.status}`);
+
+    if (auth.roles.includes('DRIVER') && !auth.roles.includes('ADMIN') && !auth.roles.includes('LOGIST')) {
+      const driverProfile = await prisma.driver.findFirst({
+        where: { user_id: auth.sub, company_id: companyId },
+        select: { id: true },
+      });
+      if (!driverProfile || order.driver_id !== driverProfile.id) {
+        return fail(res, 403, 'Ви можете приймати лише свої замовлення');
+      }
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: req.params.id },
+      data: { status: 'DRIVER_ACCEPTED' },
+      select: orderSelect,
+    });
+
+    emitOrderStatusChanged(companyId, {
+      orderId: updated.id,
+      orderNumber: updated.order_number,
+      newStatus: 'DRIVER_ACCEPTED',
+      previousStatus: 'CONFIRMED',
+    });
+
+    return ok(res, orderDto(updated));
+  }),
+);
+
+/* ─── POST /:id/request-prepayment – запит авансу ────── */
+
+ordersRouter.post(
+  '/:id/request-prepayment',
+  authorize(['ADMIN', 'LOGIST']),
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      select: { id: true, status: true },
+    });
+    if (!order) return fail(res, 404, 'Order not found');
+    if (order.status !== 'DRIVER_ACCEPTED') {
+      return fail(res, 400, `Cannot request prepayment from status ${order.status}`);
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: req.params.id },
+      data: { status: 'AWAITING_PREPAYMENT' },
+      select: orderSelect,
+    });
+
+    emitOrderStatusChanged(companyId, {
+      orderId: updated.id,
+      orderNumber: updated.order_number,
+      newStatus: 'AWAITING_PREPAYMENT',
+      previousStatus: 'DRIVER_ACCEPTED',
+    });
+
+    return ok(res, orderDto(updated));
+  }),
+);
+
+/* ─── POST /:id/mark-prepaid – фіксація авансу ───────── */
+
+ordersRouter.post(
+  '/:id/mark-prepaid',
+  authorize(['ADMIN', 'LOGIST']),
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const amount = typeof req.body?.amount === 'number' ? req.body.amount : null;
+    if (!amount || amount <= 0) return fail(res, 400, 'amount must be a positive number');
+
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      select: { id: true, status: true },
+    });
+    if (!order) return fail(res, 404, 'Order not found');
+    if (order.status !== 'AWAITING_PREPAYMENT') {
+      return fail(res, 400, `Cannot mark prepaid from status ${order.status}`);
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'PREPAID',
+        prepaid_amount: amount,
+        prepaid_at: new Date(),
+        total_paid: amount,
+      },
+      select: orderSelect,
+    });
+
+    emitOrderStatusChanged(companyId, {
+      orderId: updated.id,
+      orderNumber: updated.order_number,
+      newStatus: 'PREPAID',
+      previousStatus: 'AWAITING_PREPAYMENT',
+    });
+
+    return ok(res, orderDto(updated));
+  }),
+);
+
+/* ─── POST /:id/mark-final-paid – фіксація фін. оплати ─ */
+
+ordersRouter.post(
+  '/:id/mark-final-paid',
+  authorize(['ADMIN', 'LOGIST']),
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const amount = typeof req.body?.amount === 'number' ? req.body.amount : null;
+    if (!amount || amount <= 0) return fail(res, 400, 'amount must be a positive number');
+
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      select: { id: true, status: true, prepaid_amount: true },
+    });
+    if (!order) return fail(res, 404, 'Order not found');
+    if (order.status !== 'AWAITING_FINAL_PAYMENT') {
+      return fail(res, 400, `Cannot mark final paid from status ${order.status}`);
+    }
+
+    const totalPaid = (order.prepaid_amount ?? 0) + amount;
+
+    const updated = await prisma.order.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'COMPLETED',
+        final_paid_amount: amount,
+        final_paid_at: new Date(),
+        total_paid: totalPaid,
+        client_paid: true,
+      },
+      select: orderSelect,
+    });
+
+    emitOrderStatusChanged(companyId, {
+      orderId: updated.id,
+      orderNumber: updated.order_number,
+      newStatus: 'COMPLETED',
+      previousStatus: 'AWAITING_FINAL_PAYMENT',
     });
 
     return ok(res, orderDto(updated));

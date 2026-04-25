@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AuthTokens } from '../auth/auth.storage'
-import { apiGetJson, apiPatchJson, type ApiError } from '../../lib/api'
+import { apiGetJson, apiPatchJson, apiPostJson, type ApiError } from '../../lib/api'
 import type { ApiListResponse, ApiResponse } from '../../lib/apiResponse'
 import { Button } from '../../ui/Button'
 import { Badge } from '../../ui/Badge'
@@ -9,7 +9,11 @@ import './driver-portal.css'
 
 /* ─── types ─────────────────────────────────────────────── */
 
-type OrderStatus = 'NEW' | 'CONFIRMED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED'
+type OrderStatus =
+  | 'NEW' | 'CONFIRMED' | 'DRIVER_ACCEPTED'
+  | 'AWAITING_PREPAYMENT' | 'PREPAID'
+  | 'IN_TRANSIT' | 'DELIVERED'
+  | 'AWAITING_FINAL_PAYMENT' | 'COMPLETED' | 'CANCELLED'
 
 type MyOrder = {
   id: string
@@ -48,25 +52,36 @@ function formatDate(iso?: string) {
 }
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
-  NEW:        'Нове',
-  CONFIRMED:  'Підтверджено',
-  IN_TRANSIT: 'В дорозі',
-  DELIVERED:  'Доставлено',
-  CANCELLED:  'Скасовано',
+  NEW:                    'Нове',
+  CONFIRMED:              'Підтверджено',
+  DRIVER_ACCEPTED:        'Прийнято',
+  AWAITING_PREPAYMENT:    'Очікує авансу',
+  PREPAID:                'Аванс оплачено',
+  IN_TRANSIT:             'В дорозі',
+  DELIVERED:              'Доставлено',
+  AWAITING_FINAL_PAYMENT: 'Очікує доплати',
+  COMPLETED:              'Завершено',
+  CANCELLED:              'Скасовано',
 }
 
-const STATUS_BADGE: Record<OrderStatus, 'default' | 'success' | 'warning' | 'error'> = {
-  NEW:        'default',
-  CONFIRMED:  'warning',
-  IN_TRANSIT: 'warning',
-  DELIVERED:  'success',
-  CANCELLED:  'error',
+const STATUS_BADGE: Record<OrderStatus, 'neutral' | 'success' | 'warning' | 'danger'> = {
+  NEW:                    'neutral',
+  CONFIRMED:              'warning',
+  DRIVER_ACCEPTED:        'neutral',
+  AWAITING_PREPAYMENT:    'warning',
+  PREPAID:                'warning',
+  IN_TRANSIT:             'warning',
+  DELIVERED:              'success',
+  AWAITING_FINAL_PAYMENT: 'warning',
+  COMPLETED:              'success',
+  CANCELLED:              'danger',
 }
 
-/** Наступний дозволений статус для водія (може лише просувати вперед) */
-const DRIVER_NEXT: Partial<Record<OrderStatus, OrderStatus>> = {
-  CONFIRMED:  'IN_TRANSIT',
-  IN_TRANSIT: 'DELIVERED',
+/** Статус → кнопка дії для водія */
+const DRIVER_ACTION: Partial<Record<OrderStatus, { label: string; next?: OrderStatus; accept?: boolean }>> = {
+  CONFIRMED:  { label: '✅ Прийняти договір', accept: true },
+  PREPAID:    { label: '🚚 Розпочати доставку', next: 'IN_TRANSIT' },
+  IN_TRANSIT: { label: '📦 Позначити як доставлено', next: 'DELIVERED' },
 }
 
 /* ─── component ─────────────────────────────────────────── */
@@ -109,6 +124,28 @@ export function DriverPortal({ tokens, onUnauthorized }: { tokens: AuthTokens; o
 
   useEffect(() => { void loadOrders() }, [page, tokens.accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function acceptOrder(orderId: string) {
+    setStatusLoading(true)
+    setStatusError(null)
+    try {
+      const res = await apiPostJson<ApiResponse<MyOrder>>(
+        `/api/orders/${orderId}/accept`,
+        {},
+        { headers: { Authorization: `Bearer ${tokens.accessToken}` } },
+      )
+      if (isSuccess(res)) {
+        setData((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: res.data.status } : o)))
+      } else {
+        setStatusError(res.message)
+      }
+    } catch (err) {
+      const apiErr = err as Partial<ApiError>
+      setStatusError(apiErr.message ?? 'Помилка')
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
   async function changeStatus(orderId: string, newStatus: OrderStatus) {
     setStatusLoading(true)
     setStatusError(null)
@@ -131,7 +168,7 @@ export function DriverPortal({ tokens, onUnauthorized }: { tokens: AuthTokens; o
     }
   }
 
-  const activeCount  = data.filter((o) => o.status === 'IN_TRANSIT' || o.status === 'CONFIRMED').length
+  const activeCount  = data.filter((o) => ['CONFIRMED', 'DRIVER_ACCEPTED', 'AWAITING_PREPAYMENT', 'PREPAID', 'IN_TRANSIT'].includes(o.status)).length
   const todayCount   = data.filter((o) => {
     const d = new Date(o.pickupDate)
     const today = new Date()
@@ -235,15 +272,19 @@ export function DriverPortal({ tokens, onUnauthorized }: { tokens: AuthTokens; o
           ) : (
             <div className="dp__detail">
               {/* Status action */}
-              {DRIVER_NEXT[selected.status] && (
+              {DRIVER_ACTION[selected.status] && (
                 <div className="dp__action">
                   {statusError && <div className="dp__error dp__error--sm">{statusError}</div>}
                   <Button
                     variant="primary"
                     disabled={statusLoading}
-                    onClick={() => void changeStatus(selected.id, DRIVER_NEXT[selected.status]!)}
+                    onClick={() => {
+                      const action = DRIVER_ACTION[selected.status]!
+                      if (action.accept) void acceptOrder(selected.id)
+                      else if (action.next) void changeStatus(selected.id, action.next)
+                    }}
                   >
-                    {selected.status === 'CONFIRMED'  ? '🚚 Розпочати доставку (В ДОРОЗІ)' : '✅ Позначити як Доставлено'}
+                    {DRIVER_ACTION[selected.status]!.label}
                   </Button>
                 </div>
               )}

@@ -16,8 +16,13 @@ enum OperationMode {
 enum OrderStatus {
   NEW
   CONFIRMED
+  DRIVER_ACCEPTED
+  AWAITING_PREPAYMENT
+  PREPAID
   IN_TRANSIT
   DELIVERED
+  AWAITING_FINAL_PAYMENT
+  COMPLETED
   CANCELLED
 }
 
@@ -243,6 +248,13 @@ model Order {
   margin         Float // Прибуток
   margin_percent Float // % маржі
   client_paid    Boolean @default(false)
+
+  // Оплати (Тиждень 8)
+  prepaid_amount      Float?
+  prepaid_at          DateTime?
+  final_paid_amount   Float?
+  final_paid_at       DateTime?
+  total_paid          Float    @default(0)
 
   // Додаткова інформація
   assigned_manager_id String
