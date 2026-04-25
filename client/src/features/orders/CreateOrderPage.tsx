@@ -14,7 +14,7 @@ import './create-order.css'
 type ExecutionType = 'INTERNAL' | 'EXTERNAL'
 
 type LookupClient  = { id: string; companyName: string; contactPerson: string; phone: string; email?: string; address?: string }
-type LookupDriver  = { id: string; name: string; isBusy: boolean; busyOrderNumber: string | null; busyStatus: string | null }
+type LookupDriver  = { id: string; name: string; isBusy: boolean; busyOrderNumber: string | null; busyStatus: string | null; payRate?: number | null; payType?: string }
 type LookupVehicle = { id: string; plateNumber: string; type: string; capacity: number; fuelConsumption?: number; fuelType?: string; isBusy: boolean; busyOrderNumber: string | null; busyStatus: string | null }
 type LookupCarrier = { id: string; companyName: string }
 type Lookups = { clients: LookupClient[]; drivers: LookupDriver[]; vehicles: LookupVehicle[]; carriers: LookupCarrier[] }
@@ -169,6 +169,7 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
   const [pickupCoords,   setPickupCoords]   = useState<Coords | null>(null)
   const [deliveryCoords, setDeliveryCoords] = useState<Coords | null>(null)
   const [distanceKm,     setDistanceKm]     = useState<number | null>(null)
+  const [durationHours,  setDurationHours]  = useState<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const calcDist = useCallback(async (from: Coords, to: Coords) => {
@@ -182,20 +183,23 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
       if (!res.ok) return
       const data = await res.json()
       const route = data?.routes?.[0]
-      if (route) setDistanceKm(Math.round(route.distance / 1000))
+      if (route) {
+        setDistanceKm(Math.round(route.distance / 1000))
+        setDurationHours(route.duration / 3600)
+      }
     } catch { /* aborted */ }
   }, [])
 
   const onPickup = useCallback((sel: AddressSelection) => {
     setPickupCoords(sel.coords)
     if (sel.coords && deliveryCoords) void calcDist(sel.coords, deliveryCoords)
-    else setDistanceKm(null)
+    else { setDistanceKm(null); setDurationHours(null) }
   }, [deliveryCoords, calcDist])
 
   const onDelivery = useCallback((sel: AddressSelection) => {
     setDeliveryCoords(sel.coords)
     if (pickupCoords && sel.coords) void calcDist(pickupCoords, sel.coords)
-    else setDistanceKm(null)
+    else { setDistanceKm(null); setDurationHours(null) }
   }, [pickupCoords, calcDist])
 
   /* ── fuel prices ────────────────────────────────────── */
