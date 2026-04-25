@@ -1,97 +1,108 @@
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { Routes, Route, Navigate } from "react-router-dom";
-import { LoginForm } from "./components/login-form";
-import ContractForm from "./components/contract-form";
-import ContractsList from "./components/contracts-list";
-import LogisticsContractForm from "./components/logistics-contract-form";
-// import { useAuth } from "./hooks/useAuth";
+import './App.css'
+import { AuthForm } from './features/auth/AuthForm'
+import { getAuthTokens, setAuthTokens, clearAuthTokens, type AuthTokens } from './features/auth/auth.storage'
+import { CrmShell } from './features/crm/CrmShell'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { getApiBaseUrl } from './lib/env'
 
-function App() {
-  // Тимчасово відключаємо authentication для тестування
-  // const { user, loading } = useAuth()
-  const user = { id: 'test', type: 'test' }; // Тестовий користувач
-  const loading = false;
-
-  if (loading) return null
-
-  if (!user) {
-    return (
-      <Routes>
-        <Route path="/login" element={<LoginFormWrapper />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    )
-  }
-
-  return (
-    <SidebarProvider defaultOpen={false}>
-      <AppSidebar />
-      <Routes>
-        <Route path="/dashboard" element={
-          <SidebarInset>
-            <div className="container mx-auto p-6">
-              <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-blue-100 p-6 rounded-lg">
-                  <h2 className="text-xl font-semibold mb-2">Всього договорів</h2>
-                  <p className="text-3xl font-bold text-blue-600">25</p>
-                </div>
-                <div className="bg-green-100 p-6 rounded-lg">
-                  <h2 className="text-xl font-semibold mb-2">Активні</h2>
-                  <p className="text-3xl font-bold text-green-600">12</p>
-                </div>
-                <div className="bg-yellow-100 p-6 rounded-lg">
-                  <h2 className="text-xl font-semibold mb-2">Очікують</h2>
-                  <p className="text-3xl font-bold text-yellow-600">8</p>
-                </div>
-              </div>
-            </div>
-          </SidebarInset>
-        } />
-
-        <Route path="/contract" element={
-          <SidebarInset>
-            <ContractForm />
-          </SidebarInset>
-        } />
-
-        <Route path="/logistics" element={
-          <SidebarInset>
-            <LogisticsContractForm />
-          </SidebarInset>
-        } />
-
-        <Route path="/road_freight" element={
-          <SidebarInset>
-            <ContractsList />
-          </SidebarInset>
-        } />
-        <Route path="/orders" element={<p> orders </p>} />
-        <Route path="/cashflow" element={<p> cashflow </p>} />
-        <Route path="/unit" element={<p> unit </p>} />
-        <Route path="/customers" element={<p> customers </p>} />
-        <Route path="/notifications" element={<p> notifications </p>} />
-        <Route path="/messages" element={<p> messages </p>} />
-        <Route path="/settings" element={<p> settings </p>} />
-        <Route path="/help" element={<p> help </p>} />
-
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </SidebarProvider>
-  )
+/** Decode JWT exp field (seconds). Returns null if unparseable. */
+function jwtExp(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return typeof payload.exp === 'number' ? payload.exp : null
+  } catch { return null }
 }
 
-function LoginFormWrapper() {
-  return (
-    <>
-      <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-        <div className="w-full max-w-sm">
-          <LoginForm />
-        </div>
-      </div>
-    </>
-  )
+/** Silently refresh the access token using the stored refresh token. */
+async function silentRefresh(tokens: AuthTokens): Promise<string | null> {
+  if (!tokens.refreshToken) return null
+  try {
+    const res = await fetch(new URL('/api/auth/refresh', getApiBaseUrl()).toString(), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as { data?: { accessToken?: string } }
+    return data?.data?.accessToken ?? null
+  } catch { return null }
+}
+
+function App() {
+  const [tokens, setTokensState] = useState<AuthTokens | null>(() => getAuthTokens())
+  const [route, setRoute] = useState<'login' | 'crm'>(() => {
+    const h = window.location.hash
+    if (h === '#/crm') return 'crm'
+    if (h === '#/login') return 'login'
+    return tokens ? 'crm' : 'login'
+  })
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tokensRef = useRef(tokens)
+
+  function updateTokens(t: AuthTokens | null) {
+    tokensRef.current = t
+    setTokensState(t)
+    if (t) setAuthTokens(t)
+    else clearAuthTokens()
+  }
+
+  /** Schedule a silent refresh 60 s before the access token expires. */
+  const scheduleRefresh = useCallback((t: AuthTokens) => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    const exp = jwtExp(t.accessToken)
+    if (!exp) return
+    const msUntilExpiry = exp * 1000 - Date.now()
+    const delay = Math.max(msUntilExpiry - 60_000, 0)
+    refreshTimerRef.current = setTimeout(async () => {
+      const current = tokensRef.current
+      if (!current) return
+      const newAccess = await silentRefresh(current)
+      if (newAccess) {
+        const updated = { ...current, accessToken: newAccess }
+        updateTokens(updated)
+        scheduleRefresh(updated)
+      } else {
+        // refresh failed → log out
+        updateTokens(null)
+        window.location.hash = '#/login'
+      }
+    }, delay)
+  }, [])
+
+  useEffect(() => {
+    if (tokens) scheduleRefresh(tokens)
+    return () => { if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const h = window.location.hash
+      if (h === '#/crm') setRoute('crm')
+      else setRoute('login')
+    }
+    window.addEventListener('hashchange', onHashChange)
+    onHashChange()
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  useEffect(() => {
+    const target = tokens ? '#/crm' : '#/login'
+    if (window.location.hash !== target) window.location.hash = target
+  }, [tokens])
+
+  function onLogout() {
+    updateTokens(null)
+    window.location.hash = '#/login'
+  }
+
+  function onSignedIn(t: AuthTokens) {
+    updateTokens(t)
+    scheduleRefresh(t)
+  }
+
+  if (route === 'crm' && tokens) return <CrmShell tokens={tokens} onLogout={onLogout} />
+  return <AuthForm onSignedIn={onSignedIn} onSignedOut={() => updateTokens(null)} />
 }
 
 export default App

@@ -1,175 +1,71 @@
-# 
+# Colos fullstack (Express + React + Postgres)
 
-<!-- Logo placeholder - добавте сюда логотип проекта -->
+## Структура
 
-# Colos - Logistics Platform
+- server – бекенд на Node.js, Express, TypeScript, Prisma (Postgres)
+- client – фронтенд на React + TypeScript (Vite)
 
-> **Дипломна робота** - Система управління логістикою
+## Локальний запуск без Docker
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/den-ffv/colos)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19.1-blue)](https://reactjs.org/)
-
-## 📋 Про проект
-
-Colos — це сучасна веб-платформа для управління логістичними процесами, розроблена як дипломна робота. Система забезпечує комплексне рішення для планування, відстеження та оптимізації логістичних операцій.
-
-### ✨ Основні можливості
-
-- 🚚 **Управління перевезеннями** - планування та відстеження маршрутів
-- 📦 **Облік вантажів** - контроль завантаження та розвантаження
-- 👥 **Система користувачів** - різні ролі та права доступу
-- 📊 **Аналітика та звіти** - детальна статистика операцій
-- 🔔 **Уведомлення** - real-time оновлення статусів
-- 📱 **Адаптивний дизайн** - працює на всіх пристроях
-
-## 🚀 Технології
-
-### Frontend
-- **React 19** - користувацький інтерфейс
-- **TypeScript** - типізація
-- **Vite** - збирач проекту
-- **Ant Design** - UI компоненти
-- **Redux Toolkit** - управління станом
-- **React Query** - кешування даних
-
-### Backend
-- **Node.js** - серверна частина
-- **Express** - веб-фреймворк
-- **TypeScript** - типізація
-- **Zod** - валідація даних
-- **Pino** - логування
-
-### DevOps
-- **Docker** - контейнеризація
-- **Docker Compose** - оркестрація
-- **pnpm** - менеджер пакетів
-- **ESLint** - лінтинг коду
-- **Vitest** - тестування
-
-## 🛠️ Швидкий старт
-
-### Вимоги
-- Node.js 22+
-- pnpm 9+
-- Docker (опціонально)
-
-### Розробка
+1. Встановити залежності
 
 ```bash
-# Клонування репозиторію
-git clone https://github.com/den-ffv/colos.git
-cd colos
-
-# Встановлення залежностей
-pnpm install
-
-# Запуск в режимі розробки
-pnpm run dev
+cd server && npm install
+cd ../client && npm install
 ```
 
-Додаток буде доступний:
-- **Frontend**: http://localhost:5173
-- **Backend**: http://localhost:3000
+2. Налаштувати `.env` для server
 
-### Docker
+Створи файл `server/.env` на основі `server/.env.example` і за потреби зміни `DATABASE_URL`.
+
+3. Запуск серверу
 
 ```bash
-# Запуск з Docker
-pnpm run docker:up
-
-# Або
-docker-compose up --build
+cd server
+npx prisma generate
+npx prisma migrate dev --name init
+npm run dev
 ```
 
-Додаток буде доступний на http://localhost
+4. Запуск клієнта
 
-## 📁 Структура проекту
-
-```
-├── client/          # React frontend
-│   ├── src/
-│   ├── public/
-│   └── package.json
-├── server/          # Node.js backend
-│   ├── src/
-│   └── package.json
-├── docker/          # Docker конфігурації
-├── Dockerfile       # Multi-stage build
-└── docker-compose.yml
-```
-
-## 🧪 Тестування
+В іншому терміналі:
 
 ```bash
-# Запуск всіх тестів
-pnpm run test
-
-# Тести клієнта
-pnpm run test:client
-
-# Тести сервера
-pnpm run test:server
+cd client
+npm run dev
 ```
 
-## 📦 Збірка для продакшену
+## Запуск з кореня проєкту
+
+З кореня (`colos`):
 
 ```bash
-# Збірка обох частин
-pnpm run build
-
-# Запуск production версії
-pnpm run start
+npm run dev:server   # запустить сервер
+npm run dev:client   # запустить клієнт
 ```
 
-## 📖 Документація
+(попередньо все одно потрібно виконати `npm install` в `server` та `client`).
 
-- [API Documentation](docs/api.md)
-- [Setup Guide](docs/setup.md)
-- [Docker Guide](DOCKER.md)
+## Запуск через Docker
 
-## 👨‍💻 Автор
+Переконайся, що Docker запущений.
 
-**Богдан Ч.**  
-📧 bohdan.ch@example.com  
-🎓 Дипломна робота, 2025
+З кореня проєкту:
 
-## 📄 Ліцензія
-
-Цей проект захищений ліцензією MIT. Дивіться файл [LICENSE](LICENSE) для деталей.
-
----
-
-<p align="center">
-  <i>Розроблено як частина дипломної роботи</i>
-</p>
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+docker compose up --build
 ```
+
+Це підніме:
+
+- Postgres (порт 5432)
+- бекенд на порту 4000
+- фронтенд (Vite preview) на порту 5173
+
+Після запуску відкрий у браузері:
+
+- клієнт: http://localhost:5173
+- бекенд health: http://localhost:4000/api/health
+
+Prisma в контейнері серверу застосує міграції при старті (`prisma migrate deploy`).

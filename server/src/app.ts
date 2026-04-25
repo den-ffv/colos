@@ -1,41 +1,55 @@
-import express, { Application } from 'express';
-import helmet from 'helmet';
+import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
-import compression from 'compression';
-import pinoHttp from 'pino-http';
-import { logger } from '@/utils/logger';
-import cookieParser from 'cookie-parser'
-import { healthRouter } from '@/routes/health.router';
-import { apiRouter } from '@/routes/api.router';
-import { publicRouter } from '@/routes/public.router';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { apiRouter } from './router/api.router';
+import { errorHandler } from './middleware/errorHandler';
+import { env } from './config/env';
 
-import { notFoundHandler, errorHandler } from '@/middlewares/error';
-import { authRouter } from './routes/auth.router';
-import { authCustomerRouter } from './routes/authCustomer.router';
-import { requireAuth, sessionMiddleware } from './middlewares/session';
+export const app: Application = express();
 
-export function createApp(): Application {
-  const app = express();
+/* ─── Security ──────────────────────────────────────────── */
 
-  app.use(pinoHttp({ logger }));
-  app.use(helmet());
-  // app.use(cors({ origin: env.CORS_ORIGIN || true, credentials: true }));
-  app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173', credentials: true }))
-  app.use(compression());
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.urlencoded({ extended: true }));
-  app.use(cookieParser())
-  app.use(sessionMiddleware);
+app.use(helmet());
 
-  app.use('/api/health', healthRouter);
-  
-  app.use('/api/auth', authRouter);
-  app.use('/api/auth_customer', authCustomerRouter);
-  app.use('/api', requireAuth, apiRouter);
-  app.use('/public/api', publicRouter);
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later.' },
+});
+app.use(limiter);
 
-  app.use(notFoundHandler);
-  app.use(errorHandler);
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many login attempts, please try again later.' },
+});
 
-  return app;
-}
+/* ─── Middleware ────────────────────────────────────────── */
+
+const CLIENT_ORIGIN = env.CLIENT_ORIGIN;
+app.use(
+  cors({
+    origin: CLIENT_ORIGIN ? [CLIENT_ORIGIN] : true,
+    credentials: true,
+  }),
+);
+app.use(express.json());
+
+/* ─── Routes ────────────────────────────────────────────── */
+
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    database: 'PostgreSQL + Prisma',
+  });
+});
+
+app.use('/api/auth', authLimiter);
+app.use('/api', apiRouter);
+app.use(errorHandler);

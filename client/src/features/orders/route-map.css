@@ -1,0 +1,94 @@
+/* ─── RouteMap component ─────────────────────────────── */
+
+.routeMap {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.routeMap--placeholder {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  padding: 20px;
+  text-align: center;
+}
+
+.routeMap__canvas {
+  width: 100%;
+  height: 280px;
+  border-radius: var(--radius-md);
+}
+
+.routeMap__loader,
+.routeMap__msg {
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.routeMap__msg--error {
+  color: var(--danger);
+}
+
+.routeMap__msg code {
+  background: var(--surface);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.routeMap__distance {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 3px 10px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a1a2e;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Expand / collapse button ─────────────────────────── */
+
+.routeMap__fsBtn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  color: #1a1a2e;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.routeMap__fsBtn:hover {
+  background: #fff;
+  transform: scale(1.08);
+}
+
+/* ── Fullscreen overlay ───────────────────────────────── */
+
+.routeMap--fullscreen {
+  position: fixed !important;
+  inset: 0;
+  z-index: 1000;
+  border-radius: 0 !important;
+  margin: 0 !important;
+}
+
+.routeMap--fullscreen .routeMap__canvas {
+  height: 100vh !important;
+  border-radius: 0 !important;
+}
