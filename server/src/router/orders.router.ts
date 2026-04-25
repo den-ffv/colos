@@ -780,32 +780,30 @@ ordersRouter.post(
       previousStatus: 'DRIVER_ACCEPTED',
     });
 
-    // Send invoice email + create Invoice record (fire-and-forget)
-    if (order.client?.email) {
+    // Create Invoice record + optionally send invoice email (fire-and-forget)
+    const invoiceAmount = order.client_price;
+    const invoiceNumber = `INV-${order.order_number}-PRE`;
+    const dueDays = 7;
+
+    prisma.invoice.create({
+      data: {
+        order_id: order.id,
+        company_id: companyId,
+        type: 'PREPAYMENT',
+        status: 'PENDING',
+        amount: invoiceAmount,
+        sent_at: new Date(),
+      },
+    }).then(() => {
+      if (!order.client?.email) {
+        console.warn(`[EMAIL] No client email for order ${order.order_number} — invoice email skipped`);
+        return;
+      }
       const clientEmail = order.client.email;
       const clientName = order.client.company_name;
-      const amount = order.client_price;
-      const invoiceNumber = `INV-${order.order_number}-PRE`;
-      const dueDays = 7;
-
-      Promise.all([
-        generateInvoicePdf({ invoiceNumber, contractNumber: order.order_number, clientName, amount, dueDays }),
-        prisma.invoice.create({
-          data: {
-            order_id: order.id,
-            company_id: companyId,
-            type: 'PREPAYMENT',
-            status: 'PENDING',
-            amount,
-            sent_at: new Date(),
-          },
-        }),
-      ]).then(([pdfBytes]) => {
-        return sendInvoice({ to: clientEmail, contractNumber: order.order_number, clientName, amount, dueDays, pdfBytes });
-      }).catch((err: unknown) => console.error('[EMAIL] sendInvoice failed:', err));
-    } else {
-      console.warn(`[EMAIL] No client email for order ${order.order_number} — invoice email skipped`);
-    }
+      return generateInvoicePdf({ invoiceNumber, contractNumber: order.order_number, clientName, amount: invoiceAmount, dueDays })
+        .then((pdfBytes) => sendInvoice({ to: clientEmail, contractNumber: order.order_number, clientName, amount: invoiceAmount, dueDays, pdfBytes }));
+    }).catch((err: unknown) => console.error('[EMAIL] invoice processing failed:', err));
 
     return ok(res, orderDto(updated));
   }),
