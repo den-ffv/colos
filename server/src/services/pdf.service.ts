@@ -395,7 +395,7 @@ export async function generateInvoicePdf(params: InvoicePdfParams): Promise<Buff
   const fontReg = await pdfDoc.embedFont(arialBytes);
 
   const page = pdfDoc.addPage([595, 842]); // A4
-  const { height } = page.getSize();
+  const { width, height } = page.getSize();
 
   const cBlue: RGB = rgb(0.086, 0.322, 0.812);
   const cGray: RGB = rgb(0.45, 0.45, 0.45);
@@ -403,7 +403,7 @@ export async function generateInvoicePdf(params: InvoicePdfParams): Promise<Buff
   const cLine: RGB = rgb(0.88, 0.90, 0.93);
   const ML = 44;
   const MR = 44;
-  const contentWidth = 595 - ML - MR;
+  const contentWidth = width - ML - MR;
 
   let y = height - 50;
 
@@ -411,7 +411,7 @@ export async function generateInvoicePdf(params: InvoicePdfParams): Promise<Buff
   page.drawText('COLOS', { x: ML, y, size: 22, font: fontBold, color: cBlue });
   page.drawText(' CRM', { x: ML + 72, y, size: 22, font: fontReg, color: cGray });
   y -= 16;
-  page.drawLine({ start: { x: ML, y }, end: { x: 595 - MR, y }, thickness: 2, color: cBlue });
+  page.drawLine({ start: { x: ML, y }, end: { x: width - MR, y }, thickness: 2, color: cBlue });
   y -= 28;
 
   // Title
@@ -434,7 +434,7 @@ export async function generateInvoicePdf(params: InvoicePdfParams): Promise<Buff
   metaRow('Термін оплати:', `до ${dueDate} (${dueDays} дн.)`, y); y -= 28;
 
   // Divider
-  page.drawLine({ start: { x: ML, y }, end: { x: 595 - MR, y }, thickness: 0.5, color: cLine });
+  page.drawLine({ start: { x: ML, y }, end: { x: width - MR, y }, thickness: 0.5, color: cLine });
   y -= 24;
 
   // Amount block
