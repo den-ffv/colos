@@ -282,7 +282,7 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
         note = `${days} дн × ${payRate} ₴/день = ${calc} ₴`
       }
     } else if (payType === 'FIXED') {
-      calc = Math.round(payRate)
+      calc = payRate
       note = `Фіксована ставка: ${calc} ₴`
     }
 
