@@ -374,3 +374,89 @@ export async function generateOrderPdf(order: OrderForPdf): Promise<Uint8Array> 
 
   return pdfDoc.save();
 }
+
+/* ─── Invoice PDF ────────────────────────────────────────── */
+
+export interface InvoicePdfParams {
+  invoiceNumber: string;
+  contractNumber: string;
+  clientName: string;
+  amount: number;
+  dueDays: number;
+}
+
+export async function generateInvoicePdf(params: InvoicePdfParams): Promise<Buffer> {
+  const { invoiceNumber, contractNumber, clientName, amount, dueDays } = params;
+
+  const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
+
+  const fontBold = await pdfDoc.embedFont(arialBoldBytes);
+  const fontReg = await pdfDoc.embedFont(arialBytes);
+
+  const page = pdfDoc.addPage([595, 842]); // A4
+  const { height } = page.getSize();
+
+  const cBlue: RGB = rgb(0.086, 0.322, 0.812);
+  const cGray: RGB = rgb(0.45, 0.45, 0.45);
+  const cBlack: RGB = rgb(0.08, 0.08, 0.08);
+  const cLine: RGB = rgb(0.88, 0.90, 0.93);
+  const ML = 44;
+  const MR = 44;
+  const contentWidth = 595 - ML - MR;
+
+  let y = height - 50;
+
+  // Header
+  page.drawText('COLOS', { x: ML, y, size: 22, font: fontBold, color: cBlue });
+  page.drawText(' CRM', { x: ML + 72, y, size: 22, font: fontReg, color: cGray });
+  y -= 16;
+  page.drawLine({ start: { x: ML, y }, end: { x: 595 - MR, y }, thickness: 2, color: cBlue });
+  y -= 28;
+
+  // Title
+  page.drawText('РАХУНОК НА ОПЛАТУ', { x: ML, y, size: 16, font: fontBold, color: cBlack });
+  y -= 28;
+
+  // Meta row
+  const issueDate = new Date().toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const dueDate = new Date(Date.now() + dueDays * 86400000).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  function metaRow(label: string, value: string, yPos: number) {
+    page.drawText(label, { x: ML, y: yPos, size: 10, font: fontReg, color: cGray });
+    page.drawText(value, { x: ML + 160, y: yPos, size: 10, font: fontBold, color: cBlack });
+  }
+
+  metaRow('Номер рахунку:', invoiceNumber, y); y -= 18;
+  metaRow('Договір:', contractNumber, y); y -= 18;
+  metaRow('Клієнт:', clientName, y); y -= 18;
+  metaRow('Дата виставлення:', issueDate, y); y -= 18;
+  metaRow('Термін оплати:', `до ${dueDate} (${dueDays} дн.)`, y); y -= 28;
+
+  // Divider
+  page.drawLine({ start: { x: ML, y }, end: { x: 595 - MR, y }, thickness: 0.5, color: cLine });
+  y -= 24;
+
+  // Amount block
+  const amountFormatted = amount.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  page.drawText('До сплати:', { x: ML, y, size: 12, font: fontReg, color: cGray });
+  page.drawText(`${amountFormatted} грн`, { x: ML + contentWidth - fontBold.widthOfTextAtSize(`${amountFormatted} грн`, 18), y: y - 2, size: 18, font: fontBold, color: cBlue });
+  y -= 40;
+
+  // Note
+  page.drawText('Будь ласка, здійсніть оплату авансу для початку виконання договору.', {
+    x: ML, y, size: 9, font: fontReg, color: cGray,
+  });
+  y -= 14;
+  page.drawText('Після оплати повідомте вашого менеджера.', {
+    x: ML, y, size: 9, font: fontReg, color: cGray,
+  });
+
+  // Footer
+  page.drawText(`Сформовано: ${issueDate}`, {
+    x: ML, y: 20, size: 8, font: fontReg, color: cGray,
+  });
+
+  const bytes = await pdfDoc.save();
+  return Buffer.from(bytes);
+}
