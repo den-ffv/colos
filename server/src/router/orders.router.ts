@@ -8,8 +8,8 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
 import { emitOrderStatusChanged, emitOrderUpdated } from '../services/socket';
-import { generateOrderPdf } from '../services/pdf.service';
-import { sendDriverAssigned } from '../services/email.service';
+import { generateOrderPdf, generateInvoicePdf } from '../services/pdf.service';
+import { sendDriverAssigned, sendInvoice } from '../services/email.service';
 import type { Prisma, OrderStatus, ExecutionType } from '@prisma/client';
 
 export const ordersRouter = express.Router();
@@ -754,7 +754,13 @@ ordersRouter.post(
 
     const order = await prisma.order.findFirst({
       where: { id: req.params.id, company_id: companyId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        order_number: true,
+        client_price: true,
+        client: { select: { email: true, company_name: true } },
+      },
     });
     if (!order) return fail(res, 404, 'Order not found');
     if (order.status !== 'DRIVER_ACCEPTED') {
@@ -773,6 +779,33 @@ ordersRouter.post(
       newStatus: 'AWAITING_PREPAYMENT',
       previousStatus: 'DRIVER_ACCEPTED',
     });
+
+    // Send invoice email + create Invoice record (fire-and-forget)
+    if (order.client?.email) {
+      const clientEmail = order.client.email;
+      const clientName = order.client.company_name;
+      const amount = order.client_price;
+      const invoiceNumber = `INV-${order.order_number}-PRE`;
+      const dueDays = 7;
+
+      Promise.all([
+        generateInvoicePdf({ invoiceNumber, contractNumber: order.order_number, clientName, amount, dueDays }),
+        prisma.invoice.create({
+          data: {
+            order_id: order.id,
+            company_id: companyId,
+            type: 'PREPAYMENT',
+            status: 'PENDING',
+            amount,
+            sent_at: new Date(),
+          },
+        }),
+      ]).then(([pdfBytes]) => {
+        return sendInvoice({ to: clientEmail, contractNumber: order.order_number, clientName, amount, dueDays, pdfBytes });
+      }).catch((err: unknown) => console.error('[EMAIL] sendInvoice failed:', err));
+    } else {
+      console.warn(`[EMAIL] No client email for order ${order.order_number} — invoice email skipped`);
+    }
 
     return ok(res, orderDto(updated));
   }),
