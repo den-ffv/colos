@@ -204,8 +204,13 @@ dashboardRouter.get('/summary', requireAuth, async (req, res: Response) => {
   const kanban: Record<OrderStatus, number> = {
     NEW: 0,
     CONFIRMED: 0,
+    DRIVER_ACCEPTED: 0,
+    AWAITING_PREPAYMENT: 0,
+    PREPAID: 0,
     IN_TRANSIT: 0,
     DELIVERED: 0,
+    AWAITING_FINAL_PAYMENT: 0,
+    COMPLETED: 0,
     CANCELLED: 0,
   };
   for (const o of currentOrders) kanban[o.status] += 1;
