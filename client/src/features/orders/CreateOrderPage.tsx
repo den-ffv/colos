@@ -14,7 +14,7 @@ import './create-order.css'
 type ExecutionType = 'INTERNAL' | 'EXTERNAL'
 
 type LookupClient  = { id: string; companyName: string; contactPerson: string; phone: string; email?: string; address?: string }
-type LookupDriver  = { id: string; name: string; isBusy: boolean; busyOrderNumber: string | null; busyStatus: string | null; payRate?: number | null; payType?: string }
+type LookupDriver  = { id: string; name: string; isBusy: boolean; busyOrderNumber: string | null; busyStatus: string | null; payRate?: number | null; payType?: 'PER_KM' | 'PER_HOUR' | 'PER_DAY' | 'FIXED' }
 type LookupVehicle = { id: string; plateNumber: string; type: string; capacity: number; fuelConsumption?: number; fuelType?: string; isBusy: boolean; busyOrderNumber: string | null; busyStatus: string | null }
 type LookupCarrier = { id: string; companyName: string }
 type Lookups = { clients: LookupClient[]; drivers: LookupDriver[]; vehicles: LookupVehicle[]; carriers: LookupCarrier[] }
@@ -205,7 +205,8 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
   /* ── fuel prices ────────────────────────────────────── */
   type FuelPriceEntry = { fuel_type: string; price: number }
   const [fuelPrices, setFuelPrices] = useState<FuelPriceEntry[]>([])
-  const [fuelCalcNote, setFuelCalcNote] = useState<string | null>(null)
+  const [fuelCalcNote,   setFuelCalcNote]   = useState<string | null>(null)
+  const [salaryCalcNote, setSalaryCalcNote] = useState<string | null>(null)
 
   /* ── lookups ────────────────────────────────────────── */
   const [lookups, setLookups] = useState<Lookups | null>(null)
@@ -250,6 +251,49 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.vehicleId, form.executionType, distanceKm, fuelPrices])
+
+  /* ── auto-calc salary cost ──────────────────────────── */
+  useEffect(() => {
+    if (form.executionType !== 'INTERNAL') { setSalaryCalcNote(null); return }
+    if (!form.driverId) {
+      setForm((s) => ({ ...s, estimatedSalaryCost: '' }))
+      setSalaryCalcNote(null)
+      return
+    }
+    const driver = (lookups?.drivers ?? []).find((d) => d.id === form.driverId)
+    if (!driver?.payRate) { setSalaryCalcNote(null); return }
+
+    const { payRate, payType } = driver
+    let calc: number | null = null
+    let note: string | null = null
+
+    if (payType === 'PER_KM' && distanceKm) {
+      calc = Math.round(distanceKm * payRate)
+      note = `${distanceKm} км × ${payRate} ₴/км = ${calc} ₴`
+    } else if (payType === 'PER_HOUR' && durationHours) {
+      calc = Math.round(durationHours * payRate)
+      note = `${durationHours.toFixed(1)} год × ${payRate} ₴/год = ${calc} ₴`
+    } else if (payType === 'PER_DAY' && form.pickupDate && form.deliveryDate) {
+      const days = Math.ceil(
+        (Date.parse(form.deliveryDate) - Date.parse(form.pickupDate)) / 86_400_000,
+      )
+      if (days > 0) {
+        calc = Math.round(days * payRate)
+        note = `${days} дн × ${payRate} ₴/день = ${calc} ₴`
+      }
+    } else if (payType === 'FIXED') {
+      calc = Math.round(payRate)
+      note = `Фіксована ставка: ${calc} ₴`
+    }
+
+    if (calc !== null) {
+      setForm((s) => ({ ...s, estimatedSalaryCost: String(calc) }))
+      setSalaryCalcNote(note)
+    } else {
+      setSalaryCalcNote(null)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.driverId, form.executionType, form.pickupDate, form.deliveryDate, distanceKm, durationHours])
 
   /* ── auto-save draft ────────────────────────────────── */
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
