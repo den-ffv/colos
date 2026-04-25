@@ -52,25 +52,25 @@ function buildNav(roles: string[]): { main: NavItem[]; fleet: NavItem[] } {
   const fleet: NavItem[] = [];
 
   if (isAdmin) {
-    main.push({ view: 'dashboard', label: 'Dashboard', Icon: DashboardSpeed02Icon });
+    main.push({ view: 'dashboard', label: 'Дашборд', Icon: DashboardSpeed02Icon });
   }
 
   if (isAdmin || isLogist || isManager) {
-    main.push({ view: 'orders', label: 'Shipments', Icon: DeliveryTruck01Icon });
+    main.push({ view: 'orders', label: 'Замовлення', Icon: DeliveryTruck01Icon });
   }
 
   if (isAdmin || isLogist) {
-    main.push({ view: 'clients', label: 'Customers', Icon: UserGroupIcon });
+    main.push({ view: 'clients', label: 'Клієнти', Icon: UserGroupIcon });
   }
 
   if (isAdmin) {
-    main.push({ view: 'carriers', label: 'Carriers', Icon: Building01Icon });
+    main.push({ view: 'carriers', label: 'Перевізники', Icon: Building01Icon });
     main.push({ view: 'users', label: 'Співробітники', Icon: UserEdit01Icon });
   }
 
   if (isAdmin || isManager) {
-    fleet.push({ view: 'drivers', label: 'Drivers', Icon: UserAccountIcon });
-    fleet.push({ view: 'vehicles', label: 'Vehicles', Icon: TruckIcon });
+    fleet.push({ view: 'drivers', label: 'Водії', Icon: UserAccountIcon });
+    fleet.push({ view: 'vehicles', label: 'Транспорт', Icon: TruckIcon });
   }
 
   return { main, fleet };
