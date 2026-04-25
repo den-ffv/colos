@@ -819,8 +819,17 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
                     {fuelCalcNote && <span className="co__hint co__hint--calc">{fuelCalcNote}</span>}
                   </div>
                   <div className="co__field">
-                    <label className="co__label">Зарплата водія (₴)</label>
-                    <input type="number" min="0" className="co__input" value={form.estimatedSalaryCost} onChange={(e) => set('estimatedSalaryCost', e.target.value)} placeholder="0" />
+                    <label className="co__label">
+                      Зарплата водія (₴)
+                      {salaryCalcNote && <span className="co__calcBadge">авто</span>}
+                    </label>
+                    <input
+                      type="number" min="0" className="co__input"
+                      value={form.estimatedSalaryCost}
+                      onChange={(e) => { set('estimatedSalaryCost', e.target.value); setSalaryCalcNote(null) }}
+                      placeholder="0"
+                    />
+                    {salaryCalcNote && <span className="co__hint co__hint--calc">{salaryCalcNote}</span>}
                   </div>
                 </div>
               </div>
