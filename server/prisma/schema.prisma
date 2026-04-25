@@ -7,40 +7,261 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model carriers {
+  id             String        @id
+  phone          String
+  email          String?
+  rating         Float         @default(5.0)
+  notes          String?
+  company_id     String
+  company_name   String
+  contact_person String
+  coverage_areas String[]
+  created_at     DateTime      @default(now())
+  is_available   Boolean       @default(true)
+  max_capacity   Float
+  updated_at     DateTime
+  vehicle_types  VehicleType[]
+  companies      companies     @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  orders         orders[]
+}
+
+model clients {
+  id             String    @id
+  phone          String
+  email          String?
+  address        String?
+  notes          String?
+  company_id     String
+  company_name   String
+  contact_person String
+  created_at     DateTime  @default(now())
+  updated_at     DateTime
+  companies      companies @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  orders         orders[]
+}
+
+model companies {
+  id                   String        @id
+  name                 String
+  email                String?
+  phone                String?
+  address              String?
+  created_at           DateTime      @default(now())
+  has_own_fleet        Boolean       @default(true)
+  operation_mode       OperationMode @default(HYBRID)
+  updated_at           DateTime
+  uses_broker_services Boolean       @default(true)
+  carriers             carriers[]
+  clients              clients[]
+  drivers              drivers[]
+  invoices             invoices[]
+  orders               orders[]
+  users                users[]
+  vehicles             vehicles[]
+}
+
+model drivers {
+  id             String        @id
+  phone          String
+  notes          String?
+  company_id     String
+  created_at     DateTime      @default(now())
+  first_name     String
+  is_available   Boolean       @default(true)
+  last_name      String
+  license_number String
+  updated_at     DateTime
+  user_id        String?       @unique
+  pay_rate       Float?
+  pay_type       DriverPayType @default(PER_KM)
+  companies      companies     @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  users          users?        @relation(fields: [user_id], references: [id])
+  orders         orders[]
+}
+
+model exchange_rates {
+  id         String   @id
+  currency   String
+  rate       Float
+  fetched_at DateTime @default(now())
+
+  @@index([currency])
+  @@index([fetched_at])
+}
+
+model fuel_prices {
+  id         String   @id
+  fuel_type  FuelType
+  price      Float
+  source     String   @default("naftogaz")
+  fetched_at DateTime @default(now())
+
+  @@index([fetched_at])
+  @@index([fuel_type])
+}
+
+model invoices {
+  id         String        @id
+  order_id   String
+  company_id String
+  type       InvoiceType
+  status     InvoiceStatus @default(PENDING)
+  amount     Float
+  sent_at    DateTime?
+  paid_at    DateTime?
+  created_at DateTime      @default(now())
+  updated_at DateTime
+  companies  companies     @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  orders     orders        @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
+}
+
+model orders {
+  id                    String        @id
+  quantity              Float?
+  unit                  String?
+  weight                Float?
+  volume                Float?
+  status                OrderStatus   @default(NEW)
+  margin                Float
+  notes                 String?
+  assigned_manager_id   String
+  carrier_agreed_price  Float?
+  carrier_id            String?
+  carrier_paid          Boolean       @default(false)
+  carrier_vehicle_info  String?
+  client_id             String
+  client_paid           Boolean       @default(false)
+  client_price          Float
+  company_id            String
+  created_at            DateTime      @default(now())
+  delivery_address      String
+  delivery_date         DateTime?
+  driver_id             String?
+  estimated_fuel_cost   Float?
+  estimated_salary_cost Float?
+  execution_type        ExecutionType
+  external_cost         Float?
+  internal_cost         Float?
+  margin_percent        Float
+  order_number          String        @unique
+  pickup_address        String
+  pickup_date           DateTime
+  product_type          String?
+  total_cost            Float
+  updated_at            DateTime
+  vehicle_id            String?
+  final_paid_amount     Float?
+  final_paid_at         DateTime?
+  prepaid_amount        Float?
+  prepaid_at            DateTime?
+  total_paid            Float         @default(0)
+  invoices              invoices[]
+  users                 users         @relation(fields: [assigned_manager_id], references: [id])
+  carriers              carriers?     @relation(fields: [carrier_id], references: [id])
+  clients               clients       @relation(fields: [client_id], references: [id])
+  companies             companies     @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  drivers               drivers?      @relation(fields: [driver_id], references: [id])
+  vehicles              vehicles?     @relation(fields: [vehicle_id], references: [id])
+}
+
+model user_roles {
+  id         String   @id
+  user_id    String
+  created_at DateTime @default(now())
+  role       Role
+  updated_at DateTime
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, role])
+  @@index([role])
+}
+
+model users {
+  id          String       @id
+  email       String       @unique
+  password    String
+  company_id  String
+  created_at  DateTime     @default(now())
+  first_name  String
+  is_active   Boolean      @default(true)
+  last_name   String
+  ui_language UiLanguage   @default(UA)
+  updated_at  DateTime
+  drivers     drivers?
+  orders      orders[]
+  user_roles  user_roles[]
+  companies   companies    @relation(fields: [company_id], references: [id], onDelete: Cascade)
+}
+
+model vehicles {
+  id               String      @id
+  type             VehicleType
+  capacity         Float
+  notes            String?
+  company_id       String
+  created_at       DateTime    @default(now())
+  is_available     Boolean     @default(true)
+  plate_number     String
+  updated_at       DateTime
+  cargo_volume     Float?
+  cost_per_km      Float?
+  fuel_consumption Float?
+  fuel_type        FuelType?
+  max_range        Float?
+  tank_capacity    Float?
+  orders           orders[]
+  companies        companies   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+}
+
+enum DriverPayType {
+  PER_KM
+  PER_HOUR
+  PER_DAY
+  FIXED
+}
+
+enum ExecutionType {
+  INTERNAL
+  EXTERNAL
+}
+
+enum FuelType {
+  DIESEL
+  PETROL_95
+  PETROL_92
+  GAS
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+}
+
+enum InvoiceType {
+  PREPAYMENT
+  FINAL
+}
+
 enum OperationMode {
-  OWN_FLEET // Власний автопарк
-  BROKER // Брокер
-  HYBRID // Змішаний режим
+  OWN_FLEET
+  BROKER
+  HYBRID
 }
 
 enum OrderStatus {
   NEW
   CONFIRMED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
   DRIVER_ACCEPTED
   AWAITING_PREPAYMENT
   PREPAID
-  IN_TRANSIT
-  DELIVERED
   AWAITING_FINAL_PAYMENT
   COMPLETED
-  CANCELLED
-}
-
-enum ExecutionType {
-  INTERNAL // Своїми ресурсами
-  EXTERNAL // Сторонній перевізник
-}
-
-enum VehicleType {
-  TRUCK
-  VAN
-  CAR
-  REFRIGERATOR
-}
-
-enum UiLanguage {
-  ENG
-  UA
 }
 
 enum Role {
@@ -52,281 +273,14 @@ enum Role {
   DRIVER
 }
 
-enum DriverPayType {
-  PER_KM
-  PER_HOUR
-  PER_DAY
-  FIXED
+enum UiLanguage {
+  ENG
+  UA
 }
 
-model Company {
-  id                   String        @id @default(uuid())
-  name                 String
-  email                String?
-  phone                String?
-  address              String?
-  operation_mode       OperationMode @default(HYBRID)
-  has_own_fleet        Boolean       @default(true)
-  uses_broker_services Boolean       @default(true)
-  created_at           DateTime      @default(now())
-  updated_at           DateTime      @updatedAt
-
-  Users    User[]
-  Clients  Client[]
-  Drivers  Driver[]
-  Vehicles Vehicle[]
-  Carriers Carrier[]
-  Orders   Order[]
-  Invoices Invoice[]
-
-  @@map("companies")
-}
-
-model User {
-  id          String     @id @default(uuid())
-  email       String     @unique
-  password    String
-  first_name  String
-  last_name   String
-  is_active   Boolean    @default(true)
-  company_id  String
-  company     Company    @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  created_at  DateTime   @default(now())
-  updated_at  DateTime   @updatedAt
-  ui_language UiLanguage @default(UA)
-
-  OrdersManaged Order[]
-  UserRoles     UserRole[]
-  DriverProfile Driver? // ONE-TO-ONE: якщо User є водієм-обліковим записом
-
-  @@map("users")
-}
-
-model UserRole {
-  id         String   @id @default(uuid())
-  user_id    String
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  role       Role
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  @@unique([user_id, role])
-  @@index([role])
-  @@map("user_roles")
-}
-
-model Client {
-  id             String   @id @default(uuid())
-  company_name   String
-  contact_person String
-  phone          String
-  email          String?
-  address        String?
-  notes          String?
-  company_id     String
-  company        Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
-
-  Orders Order[]
-
-  @@map("clients")
-}
-
-model Driver {
-  id             String        @id @default(uuid())
-  first_name     String
-  last_name      String
-  phone          String
-  license_number String
-  pay_type       DriverPayType @default(PER_KM)
-  pay_rate       Float?
-  is_available   Boolean       @default(true)
-  notes          String?
-  company_id     String
-  company        Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  // Опціональний зв'язок з обліковим записом (User з роллю DRIVER)
-  user_id        String?       @unique
-  user           User?         @relation(fields: [user_id], references: [id], onDelete: SetNull)
-  created_at     DateTime      @default(now())
-  updated_at     DateTime      @updatedAt
-
-  Orders Order[]
-
-  @@map("drivers")
-}
-
-model Vehicle {
-  id               String      @id @default(uuid())
-  plate_number     String
-  type             VehicleType
-  capacity         Float // тонн
-  fuel_type        FuelType?
-  tank_capacity    Float? // літри
-  fuel_consumption Float? // л/100км
-  cargo_volume     Float? // м³
-  cost_per_km      Float? // UAH/км (амортизація/сервіс)
-  max_range        Float? // км
-  is_available     Boolean     @default(true)
-  notes            String?
-  company_id       String
-  company          Company     @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  created_at       DateTime    @default(now())
-  updated_at       DateTime    @updatedAt
-
-  Orders Order[]
-
-  @@map("vehicles")
-}
-
-model Carrier {
-  id             String        @id @default(uuid())
-  company_name   String
-  contact_person String
-  phone          String
-  email          String?
-  vehicle_types  VehicleType[]
-  max_capacity   Float // тонн
-  coverage_areas String[] // ["Київ-Львів", "Одеса-Харків"]
-  rating         Float         @default(5.0)
-  is_available   Boolean       @default(true)
-  notes          String?
-  company_id     String
-  company        Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  created_at     DateTime      @default(now())
-  updated_at     DateTime      @updatedAt
-
-  Orders Order[]
-
-  @@map("carriers")
-}
-
-model Order {
-  id           String @id @default(uuid())
-  order_number String @unique
-  client_id    String
-  client       Client @relation(fields: [client_id], references: [id])
-
-  // Деталі вантажу
-  product_type String?
-  quantity     Float?
-  unit         String? // "тонн", "паллет", "м³"
-  weight       Float?
-  volume       Float?
-
-  // Маршрут
-  pickup_address   String
-  delivery_address String
-  pickup_date      DateTime
-  delivery_date    DateTime?
-
-  // Статус
-  status OrderStatus @default(NEW)
-
-  // Тип виконання (КЛЮЧОВЕ ПОЛЕ!)
-  execution_type ExecutionType
-
-  // Ресурси для INTERNAL (своїми силами)
-  driver_id             String?
-  driver                Driver?  @relation(fields: [driver_id], references: [id])
-  vehicle_id            String?
-  vehicle               Vehicle? @relation(fields: [vehicle_id], references: [id])
-  estimated_fuel_cost   Float?
-  estimated_salary_cost Float?
-
-  // Ресурси для EXTERNAL (сторонній перевізник)
-  carrier_id           String?
-  carrier              Carrier? @relation(fields: [carrier_id], references: [id])
-  carrier_agreed_price Float?
-  carrier_paid         Boolean  @default(false)
-  carrier_vehicle_info String?
-
-  // Фінанси
-  internal_cost  Float? // Витрати на свої ресурси
-  external_cost  Float? // Витрати на перевізника
-  total_cost     Float // Загальні витрати
-  client_price   Float // Ціна для клієнта
-  margin         Float // Прибуток
-  margin_percent Float // % маржі
-  client_paid    Boolean @default(false)
-
-  // Оплати (Тиждень 8)
-  prepaid_amount      Float?
-  prepaid_at          DateTime?
-  final_paid_amount   Float?
-  final_paid_at       DateTime?
-  total_paid          Float    @default(0)
-
-  // Додаткова інформація
-  assigned_manager_id String
-  assigned_manager    User     @relation(fields: [assigned_manager_id], references: [id])
-  notes               String?
-  company_id          String
-  company             Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
-
-  invoices Invoice[]
-
-  @@map("orders")
-}
-
-// ─── Market Data ─────────────────────────────────────────────────────────────
-
-model ExchangeRate {
-  id         String   @id @default(uuid())
-  currency   String // "USD", "EUR", "PLN", "GBP"
-  rate       Float // курс до UAH (скільки UAH за 1 одиницю валюти)
-  fetched_at DateTime @default(now())
-
-  @@index([currency])
-  @@index([fetched_at])
-  @@map("exchange_rates")
-}
-
-enum FuelType {
-  DIESEL // Дизель
-  PETROL_95 // А-95
-  PETROL_92 // А-92
-  GAS // Газ (LPG)
-}
-
-model FuelPrice {
-  id         String   @id @default(uuid())
-  fuel_type  FuelType
-  price      Float // ціна за літр, UAH
-  source     String   @default("naftogaz") // джерело даних
-  fetched_at DateTime @default(now())
-
-  @@index([fuel_type])
-  @@index([fetched_at])
-  @@map("fuel_prices")
-}
-
-enum InvoiceType {
-  PREPAYMENT
-  FINAL
-}
-
-enum InvoiceStatus {
-  PENDING
-  PAID
-}
-
-model Invoice {
-  id         String        @id @default(uuid())
-  order_id   String
-  order      Order         @relation(fields: [order_id], references: [id], onDelete: Cascade)
-  company_id String
-  company    Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  type       InvoiceType
-  status     InvoiceStatus @default(PENDING)
-  amount     Float
-  sent_at    DateTime?
-  paid_at    DateTime?
-  created_at DateTime      @default(now())
-  updated_at DateTime      @updatedAt
-
-  @@index([order_id])
-  @@map("invoices")
+enum VehicleType {
+  TRUCK
+  VAN
+  CAR
+  REFRIGERATOR
 }
