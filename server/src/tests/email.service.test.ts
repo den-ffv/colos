@@ -14,6 +14,7 @@ import {
   sendContractSignature,
   sendInvoice,
   sendDriverAssigned,
+  sendCompletionNotification,
 } from '../services/email.service';
 
 const PDF_STUB = Buffer.from('fake-pdf-bytes');
@@ -66,6 +67,21 @@ describe('email.service — dev mode (SMTP_USER порожній)', () => {
         pickupAddress: 'Київ, вул. Хрещатик 1',
         deliveryAddress: 'Львів, пл. Ринок 1',
         pickupDate: '20.04.2026, 08:00',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it('sendCompletionNotification не кидає помилку і не викликає sendMail', async () => {
+    await expect(
+      sendCompletionNotification({
+        to: 'client@test.com',
+        clientName: 'ТОВ Тест',
+        contractNumber: 'CONTR-2026-0001',
+        prepaidAmount: 30000,
+        finalAmount: 20000,
+        totalPaid: 50000,
       }),
     ).resolves.toBeUndefined();
 
@@ -155,5 +171,25 @@ describe('email.service — production mode (SMTP_USER встановлено)',
         pdfBytes: PDF_STUB,
       }),
     ).rejects.toThrow('SMTP connection refused');
+  });
+
+  it('sendCompletionNotification викликає sendMail з підсумком платежів', async () => {
+    await sendCompletionNotification({
+      to: 'client@test.com',
+      clientName: 'ТОВ Тест',
+      contractNumber: 'CONTR-2026-0001',
+      prepaidAmount: 30000,
+      finalAmount: 20000,
+      totalPaid: 50000,
+    });
+
+    expect(mockSendMail).toHaveBeenCalledOnce();
+    const call = mockSendMail.mock.calls[0][0] as Record<string, unknown>;
+    expect(call.to).toBe('client@test.com');
+    expect(call.subject).toContain('CONTR-2026-0001');
+    expect(call.html).toContain('ТОВ Тест');
+    expect(call.html).toContain('30');
+    expect(call.html).toContain('20');
+    expect(call.html).toContain('50');
   });
 });

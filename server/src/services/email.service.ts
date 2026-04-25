@@ -47,6 +47,15 @@ export interface SendDriverAssignedParams {
   pickupDate: string;
 }
 
+export interface SendCompletionParams {
+  to: string;
+  clientName: string;
+  contractNumber: string;
+  prepaidAmount: number;
+  finalAmount: number;
+  totalPaid: number;
+}
+
 /* ─── Helpers ────────────────────────────────────────────── */
 
 function fmtMoney(amount: number): string {
@@ -231,6 +240,64 @@ export async function sendDriverAssigned(params: SendDriverAssignedParams): Prom
     from: env.SMTP_FROM,
     to,
     subject: `Новий рейс: ${contractNumber}`,
+    html,
+  });
+}
+
+/* ─── sendCompletionNotification ─────────────────────────── */
+
+export async function sendCompletionNotification(params: SendCompletionParams): Promise<void> {
+  const { to, clientName, contractNumber, prepaidAmount, finalAmount, totalPaid } = params;
+
+  const transport = getTransporter();
+  if (!transport) {
+    console.log(`[EMAIL DEV] sendCompletionNotification → to: ${to}`);
+    console.log(`[EMAIL DEV] Contract: ${contractNumber}, Total: ${fmtMoney(totalPaid)} грн`);
+    return;
+  }
+
+  const html = `
+    <div style="${baseStyle}">
+      <div style="${cardStyle}">
+        ${header()}
+        <p style="margin:0 0 8px;">Доброго дня, <strong>${clientName}</strong>!</p>
+        <p style="color:#64748b;margin:0 0 24px;">
+          Договір <strong>${contractNumber}</strong> успішно виконано. Дякуємо за співпрацю!
+        </p>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
+                    padding:20px 24px;margin-bottom:24px;">
+          <p style="margin:0 0 12px;font-weight:600;color:#15803d;font-size:14px;">Підсумок оплати</p>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="color:#64748b;font-size:13px;padding:4px 0;">Аванс:</td>
+              <td style="text-align:right;font-weight:600;font-size:13px;color:#1e293b;">
+                ${fmtMoney(prepaidAmount)} грн
+              </td>
+            </tr>
+            <tr>
+              <td style="color:#64748b;font-size:13px;padding:4px 0;">Фінальна оплата:</td>
+              <td style="text-align:right;font-weight:600;font-size:13px;color:#1e293b;">
+                ${fmtMoney(finalAmount)} грн
+              </td>
+            </tr>
+            <tr style="border-top:1px solid #bbf7d0;">
+              <td style="color:#15803d;font-size:13px;padding:8px 0 4px;font-weight:600;">Всього сплачено:</td>
+              <td style="text-align:right;font-weight:700;font-size:16px;color:#15803d;padding:8px 0 4px;">
+                ${fmtMoney(totalPaid)} грн
+              </td>
+            </tr>
+          </table>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin:0;">
+          Очікуємо на подальшу співпрацю!
+        </p>
+      </div>
+    </div>`;
+
+  await transport.sendMail({
+    from: env.SMTP_FROM,
+    to,
+    subject: `Договір №${contractNumber} виконано — підсумок оплати`,
     html,
   });
 }
