@@ -21,6 +21,10 @@ vi.mock('../utils/prisma', () => ({
     },
     vehicle: {
       count: vi.fn(),
+      findMany: vi.fn(),
+    },
+    driver: {
+      findMany: vi.fn(),
     },
     client: {
       findMany: vi.fn(),
@@ -262,5 +266,52 @@ describe('Zod-валідація при створенні клієнта', () =
 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   N. Orders — GET /lookups
+═══════════════════════════════════════════════════════════ */
+
+describe('GET /api/orders/lookups', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('повертає payRate та payType для водіїв', async () => {
+    // Мокуємо автентифікацію
+    (prisma.user.findUnique as MockedFn).mockResolvedValue({
+      ...mockUser,
+      UserRoles: [{ role: 'ADMIN' }],
+      user_roles: [{ role: 'ADMIN' }],
+    });
+
+    const token = signAccessToken({ userId: mockUser.id, companyId: mockUser.company_id, roles: ['ADMIN'] });
+
+    // Мокуємо відповіді lookups
+    (prisma.client.findMany as MockedFn).mockResolvedValue([]);
+    (prisma.driver.findMany as MockedFn).mockResolvedValue([
+      {
+        id: 'driver-001',
+        first_name: 'Олег',
+        last_name: 'Шевченко',
+        pay_rate: 8.5,
+        pay_type: 'PER_KM',
+      },
+    ]);
+    (prisma.vehicle.findMany as MockedFn).mockResolvedValue([]);
+    (prisma.carrier.findMany as MockedFn).mockResolvedValue([]);
+    (prisma.order.findMany as MockedFn).mockResolvedValue([]);
+
+    const res = await request(app)
+      .get('/api/orders/lookups')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const driver = res.body.data.drivers[0];
+    expect(driver.payRate).toBe(8.5);
+    expect(driver.payType).toBe('PER_KM');
+    expect(driver.name).toBe('Олег Шевченко');
   });
 });
