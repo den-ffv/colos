@@ -377,7 +377,7 @@ ordersRouter.get(
         take: 500,
       }),
       prisma.driver.findMany({
-        where: { company_id: companyId, is_available: true },
+        where: { company_id: companyId, is_available: true, user_id: { not: null } },
         orderBy: { last_name: 'asc' },
         select: { id: true, first_name: true, last_name: true },
       }),
@@ -638,11 +638,6 @@ ordersRouter.patch(
       }
     }
     if (!existing) return fail(res, 404, 'Order not found');
-
-    const allowed = STATUS_TRANSITIONS[existing.status];
-    if (!allowed.includes(newStatus)) {
-      return fail(res, 400, `Cannot transition from ${existing.status} to ${newStatus}`);
-    }
 
     // DRIVER: PREPAID → IN_TRANSIT; IN_TRANSIT → DELIVERED auto-transitions to AWAITING_FINAL_PAYMENT
     const isDriverOnly = auth.roles.includes('DRIVER') && !auth.roles.includes('ADMIN') && !auth.roles.includes('LOGIST');
