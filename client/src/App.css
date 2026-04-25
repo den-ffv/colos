@@ -456,6 +456,38 @@
   border-color: var(--border-2);
 }
 
+.crm__rates {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+}
+
+.crm__rateChip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.crm__rateCc {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.crm__rateVal {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
 .crm__roleBadge {
   padding: 2px 8px;
   border-radius: var(--radius-xs);

@@ -20,20 +20,6 @@ export interface FuelPriceInput {
   gas?: number;
 }
 
-// External API response format (set FUEL_PRICE_API_URL in .env)
-// Expected JSON: { "diesel": 56.5, "petrol_95": 58.2, "petrol_92": 55.0, "gas": 26.0 }
-interface ExternalFuelApiResponse {
-  diesel?: number | string;
-  petrol_95?: number | string;
-  petrol_92?: number | string;
-  gas?: number | string;
-  // also accept common alternative key names
-  Diesel?: number | string;
-  A95?: number | string;
-  A92?: number | string;
-  Gas?: number | string;
-}
-
 // ─── Currencies to track ──────────────────────────────────────────────────────
 
 const TRACKED_CURRENCIES = ['USD', 'EUR', 'PLN', 'GBP', 'CHF'];
@@ -56,38 +42,72 @@ async function fetchExchangeRates(): Promise<void> {
   console.log(`[market-data] Exchange rates saved: ${filtered.map((r) => `${r.cc}=${r.rate}`).join(', ')}`);
 }
 
-// ─── Fuel prices ─────────────────────────────────────────────────────────────
-// Primary source: FUEL_PRICE_API_URL env variable (any JSON API returning prices in UAH)
-// Fallback: manual updates via POST /api/market-data/fuel-prices
+// ─── Fuel prices — auto.ria.com scraper ──────────────────────────────────────
+// Scrapes average fuel prices for a given region from auto.ria.com/uk/toplivo/{region}/
+// Region slug (default: kiev) can be overridden via AUTORIA_REGION env variable.
+//
+// URL slugs → FuelType mapping:
+//   a95  → PETROL_95   a92 → PETROL_92   dt → DIESEL   gaz → GAS
+// a95plus is skipped (not a separate FuelType in schema; A-95 average is used instead)
 
-async function fetchFuelPricesFromExternalApi(): Promise<void> {
-  const apiUrl = process.env.FUEL_PRICE_API_URL;
-  if (!apiUrl) throw new Error('FUEL_PRICE_API_URL is not configured');
+const FUEL_SLUG_MAP: Record<string, FuelType> = {
+  a95:  FuelType.PETROL_95,
+  a92:  FuelType.PETROL_92,
+  dt:   FuelType.DIESEL,
+  gaz:  FuelType.GAS,
+};
 
-  const response = await axios.get<ExternalFuelApiResponse>(apiUrl, { timeout: 10_000 });
-  const d = response.data;
+// Matches: href=".../toplivo/{region}/{slug}/" ... bold size18">{price}</div>
+const ROW_PATTERN =
+  /href="https:\/\/auto\.ria\.com\/uk\/toplivo\/[^/]+\/([a-z0-9]+)\/"[^>]*>[^<]+<\/a>\s*<\/div>\s*<div class="t-cell bold size18">([0-9]+\.[0-9]+|-)<\/div>/g;
 
-  const parse = (v: number | string | undefined): number | null => {
-    if (v === undefined || v === null) return null;
-    const n = typeof v === 'string' ? parseFloat(v) : v;
-    return isNaN(n) ? null : n;
-  };
+async function fetchFuelPricesFromAutoRia(): Promise<void> {
+  const region = process.env.AUTORIA_REGION ?? 'kiev';
+  const url = `https://auto.ria.com/uk/toplivo/${region}/`;
+  const source = `auto.ria.com/toplivo/${region}`;
 
+  const response = await axios.get<string>(url, {
+    timeout: 10_000,
+    responseType: 'text',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; COLOS-CRM/1.0; +https://colos.ua)',
+      'Accept-Language': 'uk-UA,uk;q=0.9',
+    },
+  });
+
+  const html: string = response.data;
   const entries: Array<{ fuel_type: FuelType; price: number; source: string }> = [];
+  const seen = new Set<FuelType>();
 
-  const add = (ft: FuelType, val: number | null) => {
-    if (val !== null && val > 0) entries.push({ fuel_type: ft, price: val, source: apiUrl });
-  };
+  let match: RegExpExecArray | null;
+  // Reset lastIndex before exec loop
+  ROW_PATTERN.lastIndex = 0;
 
-  add(FuelType.DIESEL,    parse(d.diesel    ?? d.Diesel));
-  add(FuelType.PETROL_95, parse(d.petrol_95 ?? d.A95));
-  add(FuelType.PETROL_92, parse(d.petrol_92 ?? d.A92));
-  add(FuelType.GAS,       parse(d.gas       ?? d.Gas));
+  while ((match = ROW_PATTERN.exec(html)) !== null) {
+    const slug = match[1];
+    const rawPrice = match[2];
+    const fuelType = FUEL_SLUG_MAP[slug];
 
-  if (entries.length === 0) throw new Error('External fuel API returned no usable price data');
+    if (!fuelType) continue;                   // skip a100, a95plus тощо
+    if (seen.has(fuelType)) continue;          // перший збіг — середня ціна, решту пропускаємо
+    if (rawPrice === '-') continue;            // ціна недоступна
+
+    const price = parseFloat(rawPrice);
+    if (isNaN(price) || price <= 0) continue;
+
+    entries.push({ fuel_type: fuelType, price, source });
+    seen.add(fuelType);
+  }
+
+  if (entries.length === 0) {
+    throw new Error(`auto.ria.com: no fuel prices found for region "${region}"`);
+  }
 
   await prisma.fuelPrice.createMany({ data: entries });
-  console.log(`[market-data] Fuel prices saved from ${apiUrl}: ${entries.map((e) => `${e.fuel_type}=${e.price}`).join(', ')}`);
+  console.log(
+    `[market-data] Fuel prices from auto.ria.com (${region}): ` +
+    entries.map((e) => `${e.fuel_type}=${e.price}`).join(', '),
+  );
 }
 
 // ─── Manual fuel price update (used when no external API is configured) ───────
@@ -122,7 +142,7 @@ export async function fetchAllMarketData(): Promise<{ exchange: boolean; fuel: b
     .then(() => { result.exchange = true; })
     .catch((err) => console.error('[market-data] Exchange rates fetch failed:', err.message));
 
-  await fetchFuelPricesFromExternalApi()
+  await fetchFuelPricesFromAutoRia()
     .then(() => { result.fuel = true; })
     .catch((err) => console.warn('[market-data] Fuel prices auto-fetch skipped:', err.message));
 

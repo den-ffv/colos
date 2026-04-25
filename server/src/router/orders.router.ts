@@ -365,7 +365,7 @@ ordersRouter.get(
       prisma.vehicle.findMany({
         where: { company_id: companyId, is_available: true },
         orderBy: { plate_number: 'asc' },
-        select: { id: true, plate_number: true, type: true, capacity: true },
+        select: { id: true, plate_number: true, type: true, capacity: true, fuel_consumption: true, fuel_type: true },
       }),
       prisma.carrier.findMany({
         where: { company_id: companyId, is_available: true },
@@ -417,6 +417,8 @@ ordersRouter.get(
           plateNumber: v.plate_number,
           type: v.type,
           capacity: v.capacity,
+          fuelConsumption: v.fuel_consumption ?? undefined,
+          fuelType: v.fuel_type ?? undefined,
           isBusy: !!busy,
           busyOrderNumber: busy?.orderNumber ?? null,
           busyStatus: busy?.status ?? null,

@@ -15,7 +15,7 @@ type ExecutionType = 'INTERNAL' | 'EXTERNAL'
 
 type LookupClient  = { id: string; companyName: string; contactPerson: string; phone: string; email?: string; address?: string }
 type LookupDriver  = { id: string; name: string; isBusy: boolean; busyOrderNumber: string | null; busyStatus: string | null }
-type LookupVehicle = { id: string; plateNumber: string; type: string; capacity: number; isBusy: boolean; busyOrderNumber: string | null; busyStatus: string | null }
+type LookupVehicle = { id: string; plateNumber: string; type: string; capacity: number; fuelConsumption?: number; fuelType?: string; isBusy: boolean; busyOrderNumber: string | null; busyStatus: string | null }
 type LookupCarrier = { id: string; companyName: string }
 type Lookups = { clients: LookupClient[]; drivers: LookupDriver[]; vehicles: LookupVehicle[]; carriers: LookupCarrier[] }
 
@@ -198,6 +198,11 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
     else setDistanceKm(null)
   }, [pickupCoords, calcDist])
 
+  /* ── fuel prices ────────────────────────────────────── */
+  type FuelPriceEntry = { fuel_type: string; price: number }
+  const [fuelPrices, setFuelPrices] = useState<FuelPriceEntry[]>([])
+  const [fuelCalcNote, setFuelCalcNote] = useState<string | null>(null)
+
   /* ── lookups ────────────────────────────────────────── */
   const [lookups, setLookups] = useState<Lookups | null>(null)
 
@@ -213,6 +218,34 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
     }
     void load()
   }, [authHeaders, onUnauthorized])
+
+  useEffect(() => {
+    type FuelRes = { fuel_type: string; price: number }[]
+    apiGetJson<ApiResponse<FuelRes>>('/api/market-data/fuel-prices', { headers: authHeaders })
+      .then((res) => { if (isSuccess(res)) setFuelPrices(res.data) })
+      .catch(() => { /* no fuel prices available */ })
+  }, [authHeaders])
+
+  /* ── auto-calc fuel cost ────────────────────────────── */
+  useEffect(() => {
+    if (form.executionType !== 'INTERNAL') return
+    const vehicle = (lookups?.vehicles ?? []).find((v) => v.id === form.vehicleId)
+    if (!vehicle?.fuelConsumption || !distanceKm || fuelPrices.length === 0) {
+      setFuelCalcNote(null)
+      return
+    }
+    const fuelType = vehicle.fuelType ?? 'DIESEL'
+    const priceEntry = fuelPrices.find((p) => p.fuel_type === fuelType)
+      ?? fuelPrices.find((p) => p.fuel_type === 'DIESEL')
+    if (!priceEntry) { setFuelCalcNote(null); return }
+
+    const calc = Math.round((distanceKm / 100) * vehicle.fuelConsumption * priceEntry.price)
+    setForm((s) => ({ ...s, estimatedFuelCost: String(calc) }))
+    setFuelCalcNote(
+      `Авто: ${(distanceKm / 100 * vehicle.fuelConsumption).toFixed(1)} л × ${priceEntry.price} ₴/л = ${calc} ₴`
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.vehicleId, form.executionType, distanceKm, fuelPrices])
 
   /* ── auto-save draft ────────────────────────────────── */
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -728,8 +761,14 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
                 </div>
                 <div className="co__row2">
                   <div className="co__field">
-                    <label className="co__label">Витрати на пальне (₴)</label>
-                    <input type="number" min="0" className="co__input" value={form.estimatedFuelCost} onChange={(e) => set('estimatedFuelCost', e.target.value)} placeholder="0" />
+                    <label className="co__label">
+                      Витрати на пальне (₴)
+                      {fuelCalcNote && <span className="co__calcBadge">авто</span>}
+                    </label>
+                    <input type="number" min="0" className="co__input" value={form.estimatedFuelCost}
+                      onChange={(e) => { set('estimatedFuelCost', e.target.value); setFuelCalcNote(null) }}
+                      placeholder="0" />
+                    {fuelCalcNote && <span className="co__hint co__hint--calc">{fuelCalcNote}</span>}
                   </div>
                   <div className="co__field">
                     <label className="co__label">Зарплата водія (₴)</label>

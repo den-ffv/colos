@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DashboardSpeed02Icon,
   DeliveryTruck01Icon,
@@ -13,6 +13,9 @@ import {
   StreeringWheelIcon,
 } from 'hugeicons-react';
 import type { AuthTokens } from '../auth/auth.storage';
+import { apiGetJson } from '../../lib/api';
+import { isApiSuccess } from '../../lib/apiResponse';
+import type { ApiResponse } from '../../lib/apiResponse';
 import { tryGetEmailFromJwt, tryGetRolesFromJwt } from './jwt';
 import { Dashboard } from './Dashboard';
 import { ClientsPage } from '../clients/ClientsPage';
@@ -97,6 +100,22 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
   const [view, setView] = useState<CrmView>(() => defaultView(roles));
   const [editOrderData, setEditOrderData] = useState<CreateOrderDetail | null>(null);
 
+  /* ── Exchange rates ────────────────────────────────── */
+  type ExRate = { currency: string; rate: number }
+  const [exRates, setExRates] = useState<ExRate[]>([])
+
+  useEffect(() => {
+    const authHeaders = { Authorization: `Bearer ${tokens.accessToken}` }
+    const fetch = () => {
+      apiGetJson<ApiResponse<ExRate[]>>('/api/market-data/exchange-rates', { headers: authHeaders })
+        .then((res) => { if (isApiSuccess(res)) setExRates(res.data) })
+        .catch(() => { /* silently ignore */ })
+    }
+    fetch()
+    const timer = setInterval(fetch, 60 * 60 * 1000)
+    return () => clearInterval(timer)
+  }, [tokens.accessToken])
+
   const { main: NAV_MAIN, fleet: NAV_FLEET } = useMemo(() => buildNav(roles), [roles]);
   const allNav = [...NAV_MAIN, ...NAV_FLEET];
 
@@ -169,6 +188,20 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
           </div>
 
           <div className="crm__topbarRight">
+            {exRates.length > 0 && (
+              <div className="crm__rates">
+                {(['USD', 'EUR'] as const).map((cc) => {
+                  const r = exRates.find((e) => e.currency === cc)
+                  if (!r) return null
+                  return (
+                    <span key={cc} className="crm__rateChip">
+                      <span className="crm__rateCc">{cc}</span>
+                      <span className="crm__rateVal">{r.rate.toFixed(2)}</span>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
             {badge && <span className="crm__roleBadge">{badge}</span>}
             <button type="button" className="crm__iconBtn" aria-label="Notifications">
               <Notification02Icon size={17} strokeWidth={1.6} />

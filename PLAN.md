@@ -96,7 +96,7 @@
 
 ### Зовнішні API
 - **Курс валют:** НБУ API `https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json` (USD/EUR → UAH)
-- **Ціни на пальне:** MINFIN або аналогічний відкритий API
+- **Ціни на пальне:** auto.ria.com HTML scraper `https://auto.ria.com/uk/toplivo/{region}/` (середня ціна по регіону)
 
 ### Формула розрахунку
 ```
@@ -111,26 +111,22 @@
 
 ### Завдання
 
-- [ ] **Backend — `GET /api/prices/fuel`**  
-  Проксі-endpoint, що отримує актуальну ціну пального (кешує у Redis на 1 годину).
+- [x] **Backend — `GET /api/prices/fuel`**  
+  Реалізовано як `/api/market-data/fuel-prices` (latest + history). Ціни беруться з auto.ria.com HTML scraper, кешуються у БД.
 
-- [ ] **Backend — `GET /api/prices/exchange`**  
-  Проксі-endpoint до НБУ API для курсів USD/EUR (кешує у Redis на 1 годину).
+- [x] **Backend — `GET /api/prices/exchange`**  
+  Реалізовано як `/api/market-data/exchange-rates` (latest + history). Дані НБУ API (USD/EUR/PLN/GBP/CHF), кешуються у БД.
 
-- [ ] **Backend — поля на Vehicle**  
-  Додати до моделі `Vehicle`: `fuel_consumption` (л/100 км), `fuel_type` (DIESEL/PETROL/GAS).  
-  Prisma migration.
+- [x] **Backend — поля на Vehicle**  
+  Поля `fuel_consumption` (Float?, л/100 км) та `fuel_type` (FuelType?) вже додані до моделі `Vehicle` у схемі Prisma.
 
-- [ ] **Frontend — Калькулятор у формі договору**  
-  При виборі авто + маршруту → автоматичний розрахунок:
-  - Відстань через Mapbox Directions API  
-  - Ціна пального (з `/api/prices/fuel`)  
-  - Курс валют (з `/api/prices/exchange`)  
-  - Live-preview собівартості та маржі  
-  - Поле для ручного коригування
+- [x] **Frontend — Калькулятор у формі договору**  
+  При виборі авто з `fuel_consumption` + маршруту з відомою відстанню → автоматичний розрахунок `estimatedFuelCost`.  
+  Формула: `(distanceKm / 100) * fuelConsumption * fuelPrice`. Значення можна вручну відкоригувати.  
+  Зелений badge "авто" та підказка з деталями розрахунку.
 
-- [ ] **Frontend — Відображення курсу валют**  
-  Хедер або sidebar показує поточний USD/EUR курс (оновлення раз на годину через WebSocket або polling).
+- [x] **Frontend — Відображення курсу валют**  
+  Topbar CrmShell показує USD/EUR (з НБУ API), оновлення раз на годину через polling.
 
 ---
 
@@ -166,6 +162,225 @@
 
 ---
 
+---
+
+## Тиждень 8 — Lifecycle договору: прийняття водієм та оплата клієнтом
+
+### Мета
+Договір після створення проходить через чіткий workflow: логіст створює → водій приймає → клієнт платить аванс → виконується доставка → клієнт платить залишок.
+
+### Нові статуси та переходи
+
+```
+NEW → CONFIRMED (логіст підтвердив, водій призначений)
+    → DRIVER_ACCEPTED (водій прийняв договір)
+    → AWAITING_PREPAYMENT (система чекає авансу від клієнта)
+    → PREPAID (клієнт оплатив аванс ≥ собівартості)
+    → IN_TRANSIT (водій виїхав)
+    → DELIVERED (водій позначив доставку)
+    → AWAITING_FINAL_PAYMENT (чекає фінального платежу)
+    → COMPLETED (клієнт повністю оплатив)
+    → CANCELLED
+```
+
+### Завдання
+
+#### Backend
+
+- [ ] **Prisma migration — нові статуси**  
+  Розширити `OrderStatus` enum: `DRIVER_ACCEPTED`, `AWAITING_PREPAYMENT`, `PREPAID`, `AWAITING_FINAL_PAYMENT`, `COMPLETED`.
+
+- [ ] **`POST /api/orders/:id/accept` (DRIVER)**  
+  Водій приймає договір. Перехід `CONFIRMED → DRIVER_ACCEPTED`.  
+  Сервер емітить socket-подію `order:status-changed` + створює системне сповіщення для логіста.
+
+- [ ] **`POST /api/orders/:id/request-prepayment` (LOGIST/ADMIN)**  
+  Перехід `DRIVER_ACCEPTED → AWAITING_PREPAYMENT`.  
+  Надсилає email-сповіщення клієнту з посиланням на сторінку оплати.
+
+- [ ] **`POST /api/orders/:id/mark-prepaid` (ADMIN/LOGIST)**  
+  Фіксує факт отримання авансу, перехід `AWAITING_PREPAYMENT → PREPAID`.  
+  Поля: `prepaidAmount`, `prepaidAt`.
+
+- [ ] **`POST /api/orders/:id/mark-final-paid` (ADMIN/LOGIST)**  
+  Фіксує фінальну оплату, перехід `AWAITING_FINAL_PAYMENT → COMPLETED`.  
+  Поля: `finalPaidAmount`, `finalPaidAt`.
+
+- [ ] **Prisma migration — поля платежів на Order**  
+  `prepaidAmount`, `prepaidAt`, `finalPaidAmount`, `finalPaidAt`, `totalPaid`.
+
+- [ ] **Оновлення `PATCH /api/orders/:id/status` (DRIVER)**  
+  `PREPAID → IN_TRANSIT`, `IN_TRANSIT → DELIVERED` → автоматичний перехід до `AWAITING_FINAL_PAYMENT`.
+
+#### Frontend (CRM)
+
+- [ ] **Оновлення StatusBar в OrdersPage**  
+  Кнопки переходів відображаються залежно від ролі та поточного статусу.  
+  Нові кнопки: "Запросити аванс", "Зафіксувати аванс", "Зафіксувати оплату".
+
+- [ ] **Панель оплат у деталях договору**  
+  Показує: аванс (сума + дата), фінальна оплата, загальна сума, залишок до оплати, відсоток покриття.
+
+- [ ] **Driver Portal — кнопка "Прийняти договір"**  
+  Статус `CONFIRMED` → кнопка "Прийняти". Після прийняття — статус `DRIVER_ACCEPTED`.
+
+---
+
+## Тиждень 9 — Клієнтський портал (окремий веб-модуль)
+
+### Мета
+Публічна веб-сторінка (окремий React SPA або нові routes у поточному Vite-проєкті), де клієнти самостійно реєструються, подають заявки на доставку та відстежують статус своїх договорів.
+
+### Архітектура
+
+```
+client-portal/          ← новий Vite SPA або підрозділ routes у client/
+  src/
+    pages/
+      Register.tsx      ← реєстрація нового клієнта
+      Login.tsx         ← вхід клієнта (окремі JWT від внутрішніх)
+      Dashboard.tsx     ← мої договори / статуси
+      NewRequest.tsx    ← форма подачі заявки на доставку
+      OrderStatus.tsx   ← деталі конкретного договору + трекінг
+```
+
+### Ролі та доступ
+
+| Хто | Що може |
+|-----|---------|
+| **CLIENT** (новий Role enum) | Реєстрація/вхід, подача заявки, перегляд статусу своїх договорів, підтвердження оплати |
+| **LOGIST/ADMIN** | Отримує заявки від клієнтів у черзі "Нові заявки", обробляє їх → створює повноцінний договір |
+
+### Завдання
+
+#### Backend
+
+- [ ] **Prisma migration — роль CLIENT + таблиця ClientUser**  
+  `ClientUser`: `id`, `email`, `password_hash`, `clientId` (→ Client), `createdAt`.  
+  Окремі JWT-токени для клієнтського порталу (різний `audience`).
+
+- [ ] **Auth routes для клієнтського порталу**  
+  `POST /api/client-portal/auth/register` — реєстрація (створює ClientUser + Client).  
+  `POST /api/client-portal/auth/login` — вхід, повертає JWT.
+
+- [ ] **`POST /api/client-portal/requests`**  
+  Клієнт подає заявку: `pickupAddress`, `deliveryAddress`, `productType`, `quantity`, `desiredDate`, `notes`.  
+  Зберігається в нову таблицю `DeliveryRequest` зі статусом `PENDING`.
+
+- [ ] **`GET /api/client-portal/requests`**  
+  Список заявок поточного клієнта (по `clientId` із токена).
+
+- [ ] **`GET /api/client-portal/orders`**  
+  Список підтверджених договорів клієнта з поточним статусом.
+
+- [ ] **`GET /api/orders/queue` (LOGIST/ADMIN)**  
+  Черга необроблених заявок від клієнтів (`DeliveryRequest` зі статусом `PENDING`).
+
+- [ ] **`POST /api/orders/from-request/:requestId` (LOGIST/ADMIN)**  
+  Перетворює заявку клієнта на повноцінний договір — pre-fills форму CreateOrderPage.
+
+#### Frontend (Клієнтський портал)
+
+- [ ] **Окремий роутинг `/portal/*`**  
+  React Router routes, недоступні для внутрішніх користувачів.
+
+- [ ] **Сторінка реєстрації / входу клієнта**  
+  Форма з валідацією, окремий localStorage-ключ для client-JWT.
+
+- [ ] **Dashboard клієнта**  
+  Список заявок та договорів. Статус у вигляді прогрес-бару (кроки lifecycle).  
+  Real-time оновлення через Socket.io (кімната `client:{clientId}`).
+
+- [ ] **Форма нової заявки**  
+  Спрощена форма (без водія/авто/фінансів), AddressAutocomplete, карта маршруту.
+
+#### Frontend (CRM — черга заявок)
+
+- [ ] **Нова вкладка "Заявки" в CrmShell**  
+  Таблиця `DeliveryRequest` зі статусом PENDING. Кнопка "Створити договір" → відкриває CreateOrderPage з pre-filled даними.
+
+- [ ] **Badge-лічильник на вкладці "Заявки"**  
+  Socket.io подія `request:new` оновлює лічильник у реальному часі.
+
+---
+
+## Тиждень 10 — Система сповіщень (внутрішні + email)
+
+### Мета
+Централізована система сповіщень: внутрішні (in-app bell icon) для всіх ролей CRM + email-сповіщення клієнту на ключових кроках lifecycle.
+
+### Архітектура
+
+```
+Notification (БД)
+  id, userId, type, title, body, orderId?, isRead, createdAt
+
+NotificationService (backend)
+  create(userId, payload)   → INSERT + socket.io emit → user:{userId}:notification
+  markRead(id)
+  getUnread(userId)
+```
+
+### Типи сповіщень
+
+| Подія | Кому | Канал |
+|-------|------|-------|
+| Новий договір створено | LOGIST (автор) | In-app |
+| Водій призначений на договір | DRIVER | In-app |
+| Договір прийнятий водієм | LOGIST | In-app |
+| Заявка від клієнта надійшла | LOGIST/ADMIN | In-app |
+| Запит авансу | CLIENT | Email + In-app (портал) |
+| Аванс отримано | LOGIST, DRIVER | In-app |
+| Договір в дорозі | CLIENT | Email |
+| Договір доставлено | CLIENT | Email |
+| Запит фінальної оплати | CLIENT | Email + In-app (портал) |
+| Договір завершено | LOGIST, ADMIN | In-app |
+
+### Завдання
+
+#### Backend
+
+- [ ] **Prisma migration — таблиця `Notification`**  
+  `id`, `userId`, `type` (enum), `title`, `body`, `orderId` (nullable FK), `isRead` (default false), `createdAt`.
+
+- [ ] **`NotificationService`**  
+  `create(userId, data)` — INSERT у БД + `socket.io.to(userId).emit('notification', payload)`.  
+  `markRead(userId, ids[])` — PATCH isRead.  
+  `getUnread(userId)` — SELECT WHERE isRead=false.
+
+- [ ] **`GET /api/notifications`**  
+  Повертає 50 останніх сповіщень для поточного користувача.
+
+- [ ] **`PATCH /api/notifications/read`**  
+  `{ ids: string[] }` — позначити прочитаними. `{ all: true }` — позначити всі.
+
+- [ ] **EmailService (Nodemailer / Resend)**  
+  `sendOrderStatusEmail(clientEmail, { orderNumber, status, link })`.  
+  HTML-шаблон з логотипом, статусом, посиланням на портал.  
+  Конфіг через `.env`: `EMAIL_FROM`, `EMAIL_SMTP_HOST`, `EMAIL_SMTP_USER`, `EMAIL_SMTP_PASS`.
+
+- [ ] **Інтеграція NotificationService у всі lifecycle-endpoints**  
+  Кожен `POST /accept`, `mark-prepaid`, `PATCH /status` тощо викликає `NotificationService.create(...)` + за потреби `EmailService.send(...)`.
+
+#### Frontend (CRM)
+
+- [ ] **Bell icon у topbar з лічильником непрочитаних**  
+  Socket.io `notification` подія → `+1` до badge. Клік → dropdown-панель.
+
+- [ ] **Dropdown-панель сповіщень**  
+  Список останніх 20 сповіщень (title, body, час, посилання на договір).  
+  Кнопка "Позначити всі прочитаними". Автоматичний `markRead` при відкритті.
+
+- [ ] **Toast-сповіщення**  
+  Нове сповіщення через сокет → короткий toast у нижньому правому куті (3 сек).
+
+#### Frontend (Клієнтський портал)
+
+- [ ] **Панель сповіщень на Dashboard клієнта**  
+  Аналогічна CRM-панелі, але спрощена. Email-підтвердження при реєстрації.
+
+---
+
 ## Прогрес
 
 | Тиждень   | Статус |
@@ -175,5 +390,8 @@
 | Тиждень 3 | ✅ Завершено (13.04.2026) |
 | Тиждень 4 — Ролі | ✅ Завершено (13.04.2026) |
 | Тиждень 5 — Геолокація | ⏳ Не розпочато |
-| Тиждень 6 — Розрахунок вартості | ⏳ Не розпочато |
+| Тиждень 6 — Розрахунок вартості | ✅ Завершено (18.04.2026) |
 | Тиждень 7 — UX / Форма | ⏳ Не розпочато |
+| Тиждень 8 — Lifecycle / Оплати | ⏳ Не розпочато |
+| Тиждень 9 — Клієнтський портал | ⏳ Не розпочато |
+| Тиждень 10 — Система сповіщень | ⏳ Не розпочато |

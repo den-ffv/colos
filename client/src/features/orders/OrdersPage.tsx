@@ -5,6 +5,7 @@ import type { ApiListResponse, ApiResponse } from '../../lib/apiResponse'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { Drawer } from '../../ui/Drawer'
+import { Modal } from '../../ui/Modal'
 import { Badge } from '../../ui/Badge'
 import { tryGetRolesFromJwt } from '../crm/jwt'
 import { RouteMap } from './RouteMap'
@@ -218,6 +219,7 @@ export function OrdersPage({
   const [details, setDetails] = useState<OrderDetail | null>(null)
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [detailsError, setDetailsError] = useState<string | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
 
   /* ─── modal state ────────────── */
   const [editOpen, setEditOpen] = useState(false)
@@ -418,6 +420,7 @@ export function OrdersPage({
     setDetails(null)
     setDetailsError(null)
     setDetailsLoading(true)
+    setDetailOpen(true)
     try {
       const res = await apiGetJson<ApiResponse<OrderDetail>>(`/api/orders/${id}`, { headers: authHeaders })
       if (isSuccess(res)) setDetails(res.data)
@@ -429,6 +432,13 @@ export function OrdersPage({
     } finally {
       setDetailsLoading(false)
     }
+  }
+
+  function closeDetails() {
+    setDetailOpen(false)
+    setSelectedId(null)
+    setDetails(null)
+    setDetailsError(null)
   }
 
   async function loadLookups() {
@@ -694,201 +704,198 @@ export function OrdersPage({
 
       {error && <div className="orders__error">{error}</div>}
 
-      {/* ── grid ── */}
-      <div className="orders__grid">
-        {/* ── list card ── */}
-        <Card title="Список" subtitle={`${pagination.total} замовлень`}>
-          <div className="orders__tableWrap">
-            <table className="ui-table">
-              <thead>
-                <tr>
-                  <th>№</th>
-                  <th>Клієнт</th>
-                  <th>Статус</th>
-                  <th>Тип</th>
-                  <th>Забір</th>
-                  {canSeeFinance && <th>Ціна</th>}
-                  {canSeeFinance && <th>Маржа</th>}
-                  <th>Оплата</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={canSeeFinance ? 8 : 6}>Завантаження…</td></tr>
-                ) : data.length ? (
-                  data.map((o) => (
-                    <tr
-                      key={o.id}
-                      onClick={() => void openDetails(o.id)}
-                      style={{ cursor: 'pointer', background: selectedId === o.id ? 'var(--surface)' : undefined }}
-                    >
-                      <td>{o.orderNumber}</td>
-                      <td>{o.clientName}</td>
-                      <td>{renderStatusBadge(o.status)}</td>
-                      <td>{EXEC_LABELS[o.executionType]}</td>
-                      <td>{formatDate(o.pickupDate)}</td>
-                      {canSeeFinance && <td>{money(o.clientPrice)} ₴</td>}
-                      {canSeeFinance && (
-                        <td style={{ color: o.margin < 0 ? 'var(--danger)' : undefined }}>
-                          {money(o.margin)} ({o.marginPercent.toFixed(1)}%)
-                        </td>
-                      )}
-                      <td>
-                        <span className={`orders__paid orders__paid--${o.clientPaid ? 'yes' : 'no'}`}>
-                          {o.clientPaid ? 'Так' : 'Ні'}
-                        </span>
+      {/* ── list ── */}
+      <Card title="Список" subtitle={`${pagination.total} замовлень`}>
+        <div className="orders__tableWrap">
+          <table className="ui-table">
+            <thead>
+              <tr>
+                <th>№</th>
+                <th>Клієнт</th>
+                <th>Статус</th>
+                <th>Тип</th>
+                <th>Забір</th>
+                {canSeeFinance && <th>Ціна</th>}
+                {canSeeFinance && <th>Маржа</th>}
+                <th>Оплата</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={canSeeFinance ? 8 : 6}>Завантаження…</td></tr>
+              ) : data.length ? (
+                data.map((o) => (
+                  <tr
+                    key={o.id}
+                    onClick={() => void openDetails(o.id)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td>{o.orderNumber}</td>
+                    <td>{o.clientName}</td>
+                    <td>{renderStatusBadge(o.status)}</td>
+                    <td>{EXEC_LABELS[o.executionType]}</td>
+                    <td>{formatDate(o.pickupDate)}</td>
+                    {canSeeFinance && <td>{money(o.clientPrice)} ₴</td>}
+                    {canSeeFinance && (
+                      <td style={{ color: o.margin < 0 ? 'var(--danger)' : undefined }}>
+                        {money(o.margin)} ({o.marginPercent.toFixed(1)}%)
                       </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr><td colSpan={canSeeFinance ? 8 : 6}>Порожньо</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="orders__pager">
-            <Button size="sm" variant="ghost" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
-              Назад
-            </Button>
-            <div className="orders__page">
-              Сторінка {pagination.page} / {pagination.totalPages}
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-              disabled={page >= pagination.totalPages}
-            >
-              Далі
-            </Button>
-          </div>
-        </Card>
-
-        {/* ── detail card ── */}
-        <Card
-          title="Деталі"
-          subtitle={details ? details.orderNumber : 'Вибери замовлення'}
-          right={
-            selectedId ? (
-              <div className="orders__detailActions">
-                <Button size="sm" variant="secondary" onClick={() => void openEdit()} disabled={!details || detailsLoading || isFinished}>
-                  Редагувати
-                </Button>
-                {details && (
-                  <Button size="sm" variant="ghost" onClick={() => void downloadPdf(details.id, details.orderNumber)}>
-                    PDF
-                  </Button>
-                )}
-                <Button size="sm" variant="ghost" onClick={() => void deleteOrder()} disabled={!canDelete || detailsLoading}>
-                  Видалити
-                </Button>
-              </div>
-            ) : null
-          }
-        >
-          {detailsError && <div className="orders__error">{detailsError}</div>}
-          {detailsLoading ? (
-            <div>Завантаження…</div>
-          ) : details ? (
-            <div className="orders__details">
-              {/* status bar */}
-              <div className="orders__statusBar">
-                <span style={{ marginRight: 8 }}>Статус: {renderStatusBadge(details.status)}</span>
-                {STATUS_TRANSITIONS[details.status].map((next) => (
-                  <Button key={next} size="sm" variant={next === 'CANCELLED' ? 'ghost' : 'primary'} onClick={() => void changeStatus(next)}>
-                    → {STATUS_LABELS[next]}
-                  </Button>
-                ))}
-              </div>
-
-              {/* general */}
-              <div className="orders__section">Загальне</div>
-              <KV k="Клієнт" v={details.client?.companyName ?? '—'} />
-              <KV k="Контакт" v={details.client?.contactPerson ?? '—'} />
-              <KV k="Тип виконання" v={EXEC_LABELS[details.executionType]} />
-              <KV k="Менеджер" v={details.assignedManager?.name ?? '—'} />
-
-              {/* cargo */}
-              <div className="orders__section">Вантаж</div>
-              <KV k="Тип продукції" v={details.productType ?? '—'} />
-              <KV k="Кількість" v={details.quantity != null ? `${details.quantity} ${details.unit ?? ''}` : '—'} />
-              <KV k="Вага (т)" v={details.weight?.toString() ?? '—'} />
-              <KV k="Обʼєм (м³)" v={details.volume?.toString() ?? '—'} />
-
-              {/* route */}
-              <div className="orders__section">Маршрут</div>
-              <KV k="Звідки" v={details.pickupAddress} />
-              <KV k="Куди" v={details.deliveryAddress} />
-              <KV k="Дата забору" v={formatDate(details.pickupDate)} />
-              <KV k="Дата доставки" v={details.deliveryDate ? formatDate(details.deliveryDate) : '—'} />
-
-              {details.pickupAddress && details.deliveryAddress && (
-                <RouteMap pickupAddress={details.pickupAddress} deliveryAddress={details.deliveryAddress} />
-              )}
-
-              {/* resources */}
-              <div className="orders__section">
-                {details.executionType === 'INTERNAL' ? 'Власні ресурси' : 'Перевізник'}
-              </div>
-              {details.executionType === 'INTERNAL' ? (
-                <>
-                  <KV k="Водій" v={details.driver?.name ?? '—'} />
-                  <KV k="Транспорт" v={details.vehicle ? `${details.vehicle.plateNumber} (${details.vehicle.type})` : '—'} />
-                  <KV k="Пальне (оцінка)" v={details.estimatedFuelCost != null ? `${money(details.estimatedFuelCost)} ₴` : '—'} />
-                  <KV k="Зарплата (оцінка)" v={details.estimatedSalaryCost != null ? `${money(details.estimatedSalaryCost)} ₴` : '—'} />
-                </>
+                    )}
+                    <td>
+                      <span className={`orders__paid orders__paid--${o.clientPaid ? 'yes' : 'no'}`}>
+                        {o.clientPaid ? 'Так' : 'Ні'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
               ) : (
-                <>
-                  <KV k="Перевізник" v={details.carrier?.companyName ?? '—'} />
-                  <KV k="Ціна перевізника" v={details.carrierAgreedPrice != null ? `${money(details.carrierAgreedPrice)} ₴` : '—'} />
-                  <KV k="Оплата перевізнику" v={details.carrierPaid ? 'Оплачено' : 'Не оплачено'} />
-                  <KV k="Інфо про ТЗ" v={details.carrierVehicleInfo ?? '—'} />
-                </>
+                <tr><td colSpan={canSeeFinance ? 8 : 6}>Порожньо</td></tr>
               )}
+            </tbody>
+          </table>
+        </div>
 
-              {/* finance */}
-              {canSeeFinance && (
-                <>
-                  <div className="orders__section">Фінанси</div>
-                  <KV k="Собівартість" v={`${money(details.totalCost)} ₴`} />
-                  <KV k="Ціна клієнту" v={`${money(details.clientPrice)} ₴`} />
-                  <KV
-                    k="Маржа"
-                    v={
-                      <span style={{ color: details.margin < 0 ? 'var(--danger)' : 'var(--success)' }}>
-                        {money(details.margin)} ₴ ({details.marginPercent.toFixed(1)}%)
-                      </span>
-                    }
-                  />
-                  <KV
-                    k="Оплата клієнтом"
-                    v={
-                      <span className={`orders__paid orders__paid--${details.clientPaid ? 'yes' : 'no'}`}>
-                        {details.clientPaid ? 'Оплачено' : 'Не оплачено'}
-                      </span>
-                    }
-                  />
-                </>
+        <div className="orders__pager">
+          <Button size="sm" variant="ghost" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+            Назад
+          </Button>
+          <div className="orders__page">
+            Сторінка {pagination.page} / {pagination.totalPages}
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+            disabled={page >= pagination.totalPages}
+          >
+            Далі
+          </Button>
+        </div>
+      </Card>
+
+      {/* ── detail modal ── */}
+      <Modal
+        open={detailOpen}
+        title={details ? `Деталі замовлення ${details.orderNumber}` : 'Деталі замовлення'}
+        onClose={closeDetails}
+        size="lg"
+        footer={
+          selectedId ? (
+            <div className="orders__detailActions">
+              <Button size="sm" variant="secondary" onClick={() => void openEdit()} disabled={!details || detailsLoading || isFinished}>
+                Редагувати
+              </Button>
+              {details && (
+                <Button size="sm" variant="ghost" onClick={() => void downloadPdf(details.id, details.orderNumber)}>
+                  PDF
+                </Button>
               )}
-
-              {/* notes */}
-              {details.notes && (
-                <>
-                  <div className="orders__section">Нотатки</div>
-                  <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{details.notes}</div>
-                </>
-              )}
-
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-                Створено: {formatDate(details.createdAt)} · Оновлено: {formatDate(details.updatedAt)}
-              </div>
+              <Button size="sm" variant="ghost" onClick={() => void deleteOrder()} disabled={!canDelete || detailsLoading}>
+                Видалити
+              </Button>
             </div>
-          ) : (
-            <div className="orders__empty">Клікни рядок у списку</div>
-          )}
-        </Card>
-      </div>
+          ) : undefined
+        }
+      >
+        {detailsError && <div className="orders__error">{detailsError}</div>}
+        {detailsLoading ? (
+          <div>Завантаження…</div>
+        ) : details ? (
+          <div className="orders__details">
+            {/* status bar */}
+            <div className="orders__statusBar">
+              <span style={{ marginRight: 8 }}>Статус: {renderStatusBadge(details.status)}</span>
+              {STATUS_TRANSITIONS[details.status].map((next) => (
+                <Button key={next} size="sm" variant={next === 'CANCELLED' ? 'ghost' : 'primary'} onClick={() => void changeStatus(next)}>
+                  → {STATUS_LABELS[next]}
+                </Button>
+              ))}
+            </div>
+
+            {/* general */}
+            <div className="orders__section">Загальне</div>
+            <KV k="Клієнт" v={details.client?.companyName ?? '—'} />
+            <KV k="Контакт" v={details.client?.contactPerson ?? '—'} />
+            <KV k="Тип виконання" v={EXEC_LABELS[details.executionType]} />
+            <KV k="Менеджер" v={details.assignedManager?.name ?? '—'} />
+
+            {/* cargo */}
+            <div className="orders__section">Вантаж</div>
+            <KV k="Тип продукції" v={details.productType ?? '—'} />
+            <KV k="Кількість" v={details.quantity != null ? `${details.quantity} ${details.unit ?? ''}` : '—'} />
+            <KV k="Вага (т)" v={details.weight?.toString() ?? '—'} />
+            <KV k="Обʼєм (м³)" v={details.volume?.toString() ?? '—'} />
+
+            {/* route */}
+            <div className="orders__section">Маршрут</div>
+            <KV k="Звідки" v={details.pickupAddress} />
+            <KV k="Куди" v={details.deliveryAddress} />
+            <KV k="Дата забору" v={formatDate(details.pickupDate)} />
+            <KV k="Дата доставки" v={details.deliveryDate ? formatDate(details.deliveryDate) : '—'} />
+
+            {details.pickupAddress && details.deliveryAddress && (
+              <RouteMap pickupAddress={details.pickupAddress} deliveryAddress={details.deliveryAddress} />
+            )}
+
+            {/* resources */}
+            <div className="orders__section">
+              {details.executionType === 'INTERNAL' ? 'Власні ресурси' : 'Перевізник'}
+            </div>
+            {details.executionType === 'INTERNAL' ? (
+              <>
+                <KV k="Водій" v={details.driver?.name ?? '—'} />
+                <KV k="Транспорт" v={details.vehicle ? `${details.vehicle.plateNumber} (${details.vehicle.type})` : '—'} />
+                <KV k="Пальне (оцінка)" v={details.estimatedFuelCost != null ? `${money(details.estimatedFuelCost)} ₴` : '—'} />
+                <KV k="Зарплата (оцінка)" v={details.estimatedSalaryCost != null ? `${money(details.estimatedSalaryCost)} ₴` : '—'} />
+              </>
+            ) : (
+              <>
+                <KV k="Перевізник" v={details.carrier?.companyName ?? '—'} />
+                <KV k="Ціна перевізника" v={details.carrierAgreedPrice != null ? `${money(details.carrierAgreedPrice)} ₴` : '—'} />
+                <KV k="Оплата перевізнику" v={details.carrierPaid ? 'Оплачено' : 'Не оплачено'} />
+                <KV k="Інфо про ТЗ" v={details.carrierVehicleInfo ?? '—'} />
+              </>
+            )}
+
+            {/* finance */}
+            {canSeeFinance && (
+              <>
+                <div className="orders__section">Фінанси</div>
+                <KV k="Собівартість" v={`${money(details.totalCost)} ₴`} />
+                <KV k="Ціна клієнту" v={`${money(details.clientPrice)} ₴`} />
+                <KV
+                  k="Маржа"
+                  v={
+                    <span style={{ color: details.margin < 0 ? 'var(--danger)' : 'var(--success)' }}>
+                      {money(details.margin)} ₴ ({details.marginPercent.toFixed(1)}%)
+                    </span>
+                  }
+                />
+                <KV
+                  k="Оплата клієнтом"
+                  v={
+                    <span className={`orders__paid orders__paid--${details.clientPaid ? 'yes' : 'no'}`}>
+                      {details.clientPaid ? 'Оплачено' : 'Не оплачено'}
+                    </span>
+                  }
+                />
+              </>
+            )}
+
+            {/* notes */}
+            {details.notes && (
+              <>
+                <div className="orders__section">Нотатки</div>
+                <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{details.notes}</div>
+              </>
+            )}
+
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+              Створено: {formatDate(details.createdAt)} · Оновлено: {formatDate(details.updatedAt)}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       {/* ── create/edit modal ── */}
       <Drawer

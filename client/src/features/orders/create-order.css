@@ -567,6 +567,28 @@
   margin-left: 4px;
 }
 
+.co__hint--calc {
+  display: block;
+  margin-left: 0;
+  margin-top: 4px;
+  color: var(--success, #059669);
+}
+
+.co__calcBadge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  background: var(--success-light, #ecfdf5);
+  color: var(--success, #059669);
+  border: 1px solid #a7f3d0;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
 /* ── Submit error ─────────────────────────────────────── */
 
 .co__submitErr {
