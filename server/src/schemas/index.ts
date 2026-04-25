@@ -267,3 +267,34 @@ export const updateOrderSchema = orderBaseSchema.partial();
 export const updateOrderStatusSchema = z.object({
   status: orderStatusEnum,
 });
+
+// ── User Management ──────────────────────────────────────────────────────────
+
+const userRoleEnum = z.enum([
+  'ADMIN',
+  'MANAGER',
+  'DISPATCHER',
+  'ACCOUNTANT',
+  'LOGIST',
+  'DRIVER',
+]);
+
+export const createUserSchema = z.object({
+  email: z.string().email('Invalid email'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  first_name: z.string().min(1, 'First name is required'),
+  last_name: z.string().min(1, 'Last name is required'),
+  roles: z.array(userRoleEnum).min(1, 'At least one role is required'),
+  driverId: z.string().uuid('Invalid driver ID').optional(),
+});
+
+export const updateUserSchema = z.object({
+  email: z.string().email('Invalid email').optional(),
+  password: z
+    .union([z.string().min(6, 'Password must be at least 6 characters'), z.literal('')])
+    .optional(),
+  first_name: z.string().min(1).optional(),
+  last_name: z.string().min(1).optional(),
+  roles: z.array(userRoleEnum).min(1, 'At least one role is required').optional(),
+  driverId: z.string().uuid().nullable().optional(),
+});

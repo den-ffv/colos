@@ -11,6 +11,7 @@ import {
   Notification02Icon,
   ArrowDown01Icon,
   StreeringWheelIcon,
+  UserEdit01Icon,
 } from 'hugeicons-react';
 import type { AuthTokens } from '../auth/auth.storage';
 import { apiGetJson } from '../../lib/api';
@@ -25,8 +26,9 @@ import { VehiclesPage } from '../vehicles/VehiclesPage';
 import { CarriersPage } from '../carriers/CarriersPage';
 import { DriverPortal } from '../drivers/DriverPortal';
 import { CreateOrderPage, type OrderDetail as CreateOrderDetail } from '../orders/CreateOrderPage';
+import { UsersPage } from '../users/UsersPage';
 
-type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers' | 'my-orders' | 'order-new' | 'order-edit';
+type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers' | 'my-orders' | 'order-new' | 'order-edit' | 'users';
 
 type NavItem = { view: CrmView; label: string; Icon: React.ElementType };
 
@@ -63,6 +65,7 @@ function buildNav(roles: string[]): { main: NavItem[]; fleet: NavItem[] } {
 
   if (isAdmin) {
     main.push({ view: 'carriers', label: 'Carriers', Icon: Building01Icon });
+    main.push({ view: 'users', label: 'Співробітники', Icon: UserEdit01Icon });
   }
 
   if (isAdmin || isManager) {
@@ -223,6 +226,7 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
            view === 'drivers'    ? <DriversPage  tokens={tokens} onUnauthorized={onLogout} /> :
            view === 'vehicles'   ? <VehiclesPage tokens={tokens} onUnauthorized={onLogout} /> :
            view === 'carriers'   ? <CarriersPage tokens={tokens} onUnauthorized={onLogout} /> :
+           view === 'users'      ? <UsersPage    tokens={tokens} onUnauthorized={onLogout} /> :
            view === 'my-orders'  ? <DriverPortal tokens={tokens} onUnauthorized={onLogout} /> :
            view === 'order-new'  ? <CreateOrderPage tokens={tokens} onUnauthorized={onLogout}
                                     onSaved={() => setView('orders')}

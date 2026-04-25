@@ -1,0 +1,50 @@
+.users-page {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.users-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.users-page__title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.users-page__search {
+  display: flex;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.users-page__search .ui-input {
+  flex: 1;
+}
+
+.users-page__loading {
+  color: var(--text-muted);
+  padding: 24px 0;
+  text-align: center;
+}
+
+.users-page__footer {
+  padding: 12px 16px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  border-top: 1px solid var(--border);
+}
+
+.users-page__status--active {
+  color: var(--color-success, #16a34a);
+  font-weight: 500;
+}
+
+.users-page__status--inactive {
+  color: var(--text-muted);
+}
