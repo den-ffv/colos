@@ -56,6 +56,7 @@ function driverDto(d: {
   pay_rate: number | null;
   is_available: boolean;
   notes: string | null;
+  user_id: string | null;
   created_at: Date;
   updated_at: Date;
 }) {
@@ -69,6 +70,7 @@ function driverDto(d: {
     payRate: d.pay_rate ?? undefined,
     isAvailable: d.is_available,
     notes: d.notes ?? undefined,
+    userId: d.user_id ?? null,
     createdAt: d.created_at.toISOString(),
     updatedAt: d.updated_at.toISOString(),
   };
@@ -84,6 +86,7 @@ const driverSelect = {
   pay_rate: true,
   is_available: true,
   notes: true,
+  user_id: true,
   created_at: true,
   updated_at: true,
 } as const;
