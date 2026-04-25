@@ -9,7 +9,7 @@ import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
 import { emitOrderStatusChanged, emitOrderUpdated } from '../services/socket';
 import { generateOrderPdf, generateInvoicePdf } from '../services/pdf.service';
-import { sendDriverAssigned, sendInvoice } from '../services/email.service';
+import { sendDriverAssigned, sendInvoice, sendCompletionNotification } from '../services/email.service';
 import type { Prisma, OrderStatus, ExecutionType } from '@prisma/client';
 
 export const ordersRouter = express.Router();
@@ -862,7 +862,14 @@ ordersRouter.post(
 
     const order = await prisma.order.findFirst({
       where: { id: req.params.id, company_id: companyId },
-      select: { id: true, status: true, prepaid_amount: true },
+      select: {
+        id: true,
+        status: true,
+        order_number: true,
+        prepaid_amount: true,
+        prepaid_at: true,
+        client: { select: { email: true, company_name: true } },
+      },
     });
     if (!order) return fail(res, 404, 'Order not found');
     if (order.status !== 'AWAITING_FINAL_PAYMENT') {
@@ -889,6 +896,39 @@ ordersRouter.post(
       newStatus: 'COMPLETED',
       previousStatus: 'AWAITING_FINAL_PAYMENT',
     });
+
+    // Update Invoice records + send completion email (fire-and-forget)
+    const prepaidAmount = order.prepaid_amount ?? 0;
+    Promise.all([
+      prisma.invoice.updateMany({
+        where: { order_id: order.id, type: 'PREPAYMENT' },
+        data: { status: 'PAID', paid_at: order.prepaid_at ?? new Date() },
+      }),
+      prisma.invoice.create({
+        data: {
+          order_id: order.id,
+          company_id: companyId,
+          type: 'FINAL',
+          status: 'PAID',
+          amount,
+          sent_at: new Date(),
+          paid_at: new Date(),
+        },
+      }),
+    ]).then(() => {
+      if (!order.client?.email) {
+        console.warn(`[EMAIL] No client email for order ${order.order_number} — completion email skipped`);
+        return;
+      }
+      return sendCompletionNotification({
+        to: order.client.email,
+        clientName: order.client.company_name,
+        contractNumber: order.order_number,
+        prepaidAmount,
+        finalAmount: amount,
+        totalPaid,
+      });
+    }).catch((err: unknown) => console.error('[EMAIL] sendCompletionNotification failed:', err));
 
     return ok(res, orderDto(updated));
   }),
