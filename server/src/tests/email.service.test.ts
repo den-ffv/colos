@@ -188,8 +188,8 @@ describe('email.service — production mode (SMTP_USER встановлено)',
     expect(call.to).toBe('client@test.com');
     expect(call.subject).toContain('CONTR-2026-0001');
     expect(call.html).toContain('ТОВ Тест');
-    expect(call.html).toContain('30');
-    expect(call.html).toContain('20');
-    expect(call.html).toContain('50');
+    expect(call.html).toContain((30000).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    expect(call.html).toContain((20000).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    expect(call.html).toContain((50000).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   });
 });
