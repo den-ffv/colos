@@ -677,9 +677,9 @@ ordersRouter.patch(
     });
 
     // Send driver email when order is confirmed
-    if (newStatus === 'CONFIRMED') {
+    if (newStatus === 'CONFIRMED' && updated.driver_id) {
       prisma.driver.findFirst({
-        where: { id: updated.driver_id ?? '', company_id: companyId },
+        where: { id: updated.driver_id, company_id: companyId },
         select: { first_name: true, last_name: true, user: { select: { email: true } } },
       }).then((driver) => {
         if (!driver?.user?.email) return;
