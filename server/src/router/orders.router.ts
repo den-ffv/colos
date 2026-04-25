@@ -380,7 +380,7 @@ ordersRouter.get(
       prisma.driver.findMany({
         where: { company_id: companyId, is_available: true, user_id: { not: null } },
         orderBy: { last_name: 'asc' },
-        select: { id: true, first_name: true, last_name: true },
+        select: { id: true, first_name: true, last_name: true, pay_rate: true, pay_type: true },
       }),
       prisma.vehicle.findMany({
         where: { company_id: companyId, is_available: true },
@@ -425,6 +425,8 @@ ordersRouter.get(
         return {
           id: d.id,
           name: `${d.first_name} ${d.last_name}`,
+          payRate: d.pay_rate ?? null,
+          payType: d.pay_type,
           isBusy: !!busy,
           busyOrderNumber: busy?.orderNumber ?? null,
           busyStatus: busy?.status ?? null,
