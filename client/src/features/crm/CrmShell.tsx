@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DashboardSpeed02Icon,
   DeliveryTruck01Icon,
@@ -12,9 +12,11 @@ import {
   ArrowDown01Icon,
   StreeringWheelIcon,
   UserEdit01Icon,
+  UserCircle02Icon,
 } from 'hugeicons-react';
 import type { AuthTokens } from '../auth/auth.storage';
-import { apiGetJson } from '../../lib/api';
+import { apiGetJson, apiPatchJson } from '../../lib/api';
+import { getSocket } from '../../lib/socket';
 import { isApiSuccess } from '../../lib/apiResponse';
 import type { ApiResponse } from '../../lib/apiResponse';
 import { tryGetEmailFromJwt, tryGetRolesFromJwt } from './jwt';
@@ -27,8 +29,21 @@ import { CarriersPage } from '../carriers/CarriersPage';
 import { DriverPortal } from '../drivers/DriverPortal';
 import { CreateOrderPage, type OrderDetail as CreateOrderDetail } from '../orders/CreateOrderPage';
 import { UsersPage } from '../users/UsersPage';
+import { NotificationDropdown } from './NotificationDropdown';
+import { NotificationToast } from './NotificationToast';
+import { ProfilePage } from '../profile/ProfilePage';
 
-type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers' | 'my-orders' | 'order-new' | 'order-edit' | 'users';
+type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers' | 'my-orders' | 'order-new' | 'order-edit' | 'users' | 'profile';
+
+type NotifItem = {
+  id: string
+  type: string
+  title: string
+  body: string
+  orderId: string | null
+  isRead: boolean
+  createdAt: string
+}
 
 type NavItem = { view: CrmView; label: string; Icon: React.ElementType };
 
@@ -73,6 +88,8 @@ function buildNav(roles: string[]): { main: NavItem[]; fleet: NavItem[] } {
     fleet.push({ view: 'vehicles', label: 'Транспорт', Icon: TruckIcon });
   }
 
+  main.push({ view: 'profile', label: 'Профіль', Icon: UserCircle02Icon });
+
   return { main, fleet };
 }
 
@@ -103,12 +120,50 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
   const [view, setView] = useState<CrmView>(() => defaultView(roles));
   const [editOrderData, setEditOrderData] = useState<CreateOrderDetail | null>(null);
 
+  const authHeaders = useMemo(() => ({ Authorization: `Bearer ${tokens.accessToken}` }), [tokens.accessToken]);
+
+  /* ── Notifications ─────────────────────────────────── */
+  const [unreadCount,   setUnreadCount]   = useState(0);
+  const [notifications, setNotifications] = useState<NotifItem[]>([]);
+  const [notifOpen,     setNotifOpen]     = useState(false);
+  const [toasts,        setToasts]        = useState<NotifItem[]>([]);
+
+  useEffect(() => {
+    type NotifResp = { notifications: NotifItem[]; unreadCount: number }
+    apiGetJson<ApiResponse<NotifResp>>('/api/notifications', { headers: authHeaders })
+      .then((res) => {
+        if (res && 'success' in res && res.success) {
+          setNotifications((res as { success: true; data: NotifResp }).data.notifications);
+          setUnreadCount((res as { success: true; data: NotifResp }).data.unreadCount);
+        }
+      })
+      .catch(() => { /* bell stays at 0 */ });
+  }, [authHeaders]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const handler = (n: NotifItem) => {
+      setNotifications((prev) => [n, ...prev]);
+      setUnreadCount((c) => c + 1);
+      setToasts((prev) => [...prev.slice(-2), n]);
+    };
+    socket.on('notification', handler);
+    return () => { socket.off('notification', handler); };
+  }, []);
+
+  const markAllRead = useCallback(() => {
+    apiPatchJson('/api/notifications/read', { all: true }, { headers: authHeaders })
+      .catch(() => { /* ignore */ });
+    setUnreadCount(0);
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  }, [authHeaders]);
+
   /* ── Exchange rates ────────────────────────────────── */
   type ExRate = { currency: string; rate: number }
   const [exRates, setExRates] = useState<ExRate[]>([])
 
   useEffect(() => {
-    const authHeaders = { Authorization: `Bearer ${tokens.accessToken}` }
     const fetch = () => {
       apiGetJson<ApiResponse<ExRate[]>>('/api/market-data/exchange-rates', { headers: authHeaders })
         .then((res) => { if (isApiSuccess(res)) setExRates(res.data) })
@@ -117,7 +172,7 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
     fetch()
     const timer = setInterval(fetch, 60 * 60 * 1000)
     return () => clearInterval(timer)
-  }, [tokens.accessToken])
+  }, [authHeaders])
 
   const { main: NAV_MAIN, fleet: NAV_FLEET } = useMemo(() => buildNav(roles), [roles]);
   const allNav = [...NAV_MAIN, ...NAV_FLEET];
@@ -206,9 +261,35 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
               </div>
             )}
             {badge && <span className="crm__roleBadge">{badge}</span>}
-            <button type="button" className="crm__iconBtn" aria-label="Notifications">
-              <Notification02Icon size={17} strokeWidth={1.6} />
-            </button>
+            <div className="crm__bellWrap">
+              <button
+                type="button"
+                className="crm__iconBtn crm__bellBtn"
+                aria-label="Сповіщення"
+                onClick={() => {
+                  setNotifOpen((o) => !o);
+                  if (!notifOpen) markAllRead();
+                }}
+              >
+                <Notification02Icon size={17} strokeWidth={1.6} />
+                {unreadCount > 0 && (
+                  <span className="crm__bellBadge">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              {notifOpen && (
+                <NotificationDropdown
+                  notifications={notifications.slice(0, 20)}
+                  onMarkAllRead={markAllRead}
+                  onClose={() => setNotifOpen(false)}
+                  onNavigate={(orderId) => {
+                    setNotifOpen(false);
+                    if (orderId) setView('orders');
+                  }}
+                />
+              )}
+            </div>
             <button type="button" className="crm__userChip" onClick={onLogout} title="Sign out">
               <div className="crm__userAvatar">{avatarLetter}</div>
               <span className="crm__userName">{displayName}</span>
@@ -235,9 +316,15 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
                                     editOrder={editOrderData}
                                     onSaved={() => { setEditOrderData(null); setView('orders'); }}
                                     onCancel={() => { setEditOrderData(null); setView('orders'); }} /> :
+           view === 'profile'    ? <ProfilePage tokens={tokens} /> :
            null}
         </div>
       </main>
+      <NotificationToast
+        toasts={toasts}
+        onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
+        onNavigate={(orderId) => { if (orderId) setView('orders'); }}
+      />
     </div>
   );
 }

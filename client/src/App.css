@@ -456,6 +456,17 @@
   border-color: var(--border-2);
 }
 
+.crm__bellWrap { position: relative; }
+.crm__bellBtn { position: relative; width: auto; padding: 0 8px; }
+.crm__bellBadge {
+  position: absolute; top: -2px; right: -2px;
+  background: #ef4444; color: #fff;
+  font-size: 9px; font-weight: 700;
+  min-width: 14px; height: 14px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+}
+
 .crm__rates {
   display: flex;
   align-items: center;
