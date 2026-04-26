@@ -26,6 +26,11 @@ export async function isEnabled(
   return channel === 'email' ? pref.email_enabled : pref.in_app_enabled;
 }
 
+/**
+ * Inserts an in-app notification and emits it via socket.
+ * Respects the user's inApp preference only.
+ * Email notifications are handled separately by the email service.
+ */
 export async function create(params: CreateNotificationParams): Promise<void> {
   const { userId, type, title, body, orderId } = params;
   const inAppEnabled = await isEnabled(userId, type, 'inApp');
