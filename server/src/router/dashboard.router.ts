@@ -122,13 +122,13 @@ dashboardRouter.get('/summary', requireAuth, async (req, res: Response) => {
   const activeStatuses: OrderStatus[] = ['NEW', 'CONFIRMED', 'IN_TRANSIT'];
 
   const [activeNow, vehiclesTotal, activeWithVehicles, currentOrders, previousOrders] = await Promise.all([
-    prisma.order.count({ where: { company_id: companyId, status: { in: activeStatuses } } }),
-    prisma.vehicle.count({ where: { company_id: companyId } }),
-    prisma.order.findMany({
+    prisma.orders.count({ where: { company_id: companyId, status: { in: activeStatuses } } }),
+    prisma.vehicles.count({ where: { company_id: companyId } }),
+    prisma.orders.findMany({
       where: { company_id: companyId, status: { in: activeStatuses }, execution_type: 'INTERNAL', vehicle_id: { not: null } },
       select: { vehicle_id: true },
     }),
-    prisma.order.findMany({
+    prisma.orders.findMany({
       where: { company_id: companyId, created_at: { gte: range.from, lte: range.to } },
       select: {
         id: true,
@@ -142,7 +142,7 @@ dashboardRouter.get('/summary', requireAuth, async (req, res: Response) => {
         client_price: true,
       },
     }),
-    prisma.order.findMany({
+    prisma.orders.findMany({
       where: { company_id: companyId, created_at: { gte: prev.from, lte: prev.to } },
       select: {
         status: true,
@@ -282,45 +282,45 @@ dashboardRouter.get('/stats', requireAuth, async (req, res: Response) => {
   const fromWeek = startOfWeekMonday(now);
   const fromMonth = startOfMonth(now);
 
-  const company = await prisma.company.findFirst({
+  const company = await prisma.companies.findFirst({
     where: { id: companyId },
     select: { has_own_fleet: true, uses_broker_services: true },
   });
 
   const [totalOrders, ordersToday, ordersThisWeek, ordersThisMonth, byStatus, byExecutionType, revenueToday, revenueWeek, revenueMonth, marginAgg, unpaidAgg] =
     await Promise.all([
-      prisma.order.count({ where: { company_id: companyId } }),
-      prisma.order.count({ where: { company_id: companyId, created_at: { gte: fromToday, lte: now } } }),
-      prisma.order.count({ where: { company_id: companyId, created_at: { gte: fromWeek, lte: now } } }),
-      prisma.order.count({ where: { company_id: companyId, created_at: { gte: fromMonth, lte: now } } }),
-      prisma.order.groupBy({
+      prisma.orders.count({ where: { company_id: companyId } }),
+      prisma.orders.count({ where: { company_id: companyId, created_at: { gte: fromToday, lte: now } } }),
+      prisma.orders.count({ where: { company_id: companyId, created_at: { gte: fromWeek, lte: now } } }),
+      prisma.orders.count({ where: { company_id: companyId, created_at: { gte: fromMonth, lte: now } } }),
+      prisma.orders.groupBy({
         by: ['status'],
         where: { company_id: companyId },
         _count: { _all: true },
       }),
-      prisma.order.groupBy({
+      prisma.orders.groupBy({
         by: ['execution_type'],
         where: { company_id: companyId },
         _count: { _all: true },
       }),
-      prisma.order.aggregate({
+      prisma.orders.aggregate({
         where: { company_id: companyId, created_at: { gte: fromToday, lte: now } },
         _sum: { client_price: true },
       }),
-      prisma.order.aggregate({
+      prisma.orders.aggregate({
         where: { company_id: companyId, created_at: { gte: fromWeek, lte: now } },
         _sum: { client_price: true },
       }),
-      prisma.order.aggregate({
+      prisma.orders.aggregate({
         where: { company_id: companyId, created_at: { gte: fromMonth, lte: now } },
         _sum: { client_price: true },
       }),
-      prisma.order.aggregate({
+      prisma.orders.aggregate({
         where: { company_id: companyId },
         _sum: { margin: true },
         _avg: { margin: true },
       }),
-      prisma.order.aggregate({
+      prisma.orders.aggregate({
         where: { company_id: companyId, client_paid: false },
         _count: { _all: true },
         _sum: { client_price: true },
@@ -362,19 +362,19 @@ dashboardRouter.get('/stats', requireAuth, async (req, res: Response) => {
 
   if (company?.has_own_fleet) {
     const [totalDrivers, availableDrivers, totalVehicles, availableVehicles] = await Promise.all([
-      prisma.driver.count({ where: { company_id: companyId } }),
-      prisma.driver.count({ where: { company_id: companyId, is_available: true } }),
-      prisma.vehicle.count({ where: { company_id: companyId } }),
-      prisma.vehicle.count({ where: { company_id: companyId, is_available: true } }),
+      prisma.drivers.count({ where: { company_id: companyId } }),
+      prisma.drivers.count({ where: { company_id: companyId, is_available: true } }),
+      prisma.vehicles.count({ where: { company_id: companyId } }),
+      prisma.vehicles.count({ where: { company_id: companyId, is_available: true } }),
     ]);
     response.ownFleet = { totalDrivers, availableDrivers, totalVehicles, availableVehicles };
   }
 
   if (company?.uses_broker_services) {
     const [total, available, avgRating] = await Promise.all([
-      prisma.carrier.count({ where: { company_id: companyId } }),
-      prisma.carrier.count({ where: { company_id: companyId, is_available: true } }),
-      prisma.carrier.aggregate({ where: { company_id: companyId }, _avg: { rating: true } }),
+      prisma.carriers.count({ where: { company_id: companyId } }),
+      prisma.carriers.count({ where: { company_id: companyId, is_available: true } }),
+      prisma.carriers.aggregate({ where: { company_id: companyId }, _avg: { rating: true } }),
     ]);
     response.carriers = { total, available, averageRating: avgRating._avg.rating ?? 0 };
   }

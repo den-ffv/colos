@@ -75,14 +75,14 @@ usersRouter.get(
     };
 
     const [users, total] = await prisma.$transaction([
-      prisma.user.findMany({
+      prisma.users.findMany({
         where,
         skip,
         take: limit,
         orderBy: { created_at: 'desc' },
         include: userInclude,
       }),
-      prisma.user.count({ where }),
+      prisma.users.count({ where }),
     ]);
 
     return okList(res, users.map(toUserDto), {
@@ -110,13 +110,13 @@ usersRouter.post(
       driverId?: string;
     };
 
-    const existing = await prisma.user.findFirst({
+    const existing = await prisma.users.findFirst({
       where: { email, company_id: auth.company_id },
     });
     if (existing) return fail(res, 409, 'Email already in use');
 
     if (driverId) {
-      const driver = await prisma.driver.findFirst({
+      const driver = await prisma.drivers.findFirst({
         where: { id: driverId, company_id: auth.company_id },
       });
       if (!driver) return fail(res, 400, 'Driver not found');
@@ -126,7 +126,7 @@ usersRouter.post(
     const hash = await bcrypt.hash(password, 10);
 
     const user = await prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
+      const newUser = await tx.users.create({
         data: {
           email,
           password: hash,
@@ -138,7 +138,7 @@ usersRouter.post(
         include: userInclude,
       });
       if (driverId && roles.includes('DRIVER')) {
-        await tx.driver.update({ where: { id: driverId }, data: { user_id: newUser.id } });
+        await tx.drivers.update({ where: { id: driverId }, data: { user_id: newUser.id } });
       }
       return newUser;
     });
@@ -164,14 +164,14 @@ usersRouter.put(
       driverId?: string | null;
     };
 
-    const existing = await prisma.user.findFirst({
+    const existing = await prisma.users.findFirst({
       where: { id, company_id: auth.company_id },
       include: { DriverProfile: { select: { id: true } } },
     });
     if (!existing) return fail(res, 404, 'User not found');
 
     if (email && email !== existing.email) {
-      const conflict = await prisma.user.findFirst({
+      const conflict = await prisma.users.findFirst({
         where: { email, company_id: auth.company_id },
       });
       if (conflict) return fail(res, 409, 'Email already in use');
@@ -184,7 +184,7 @@ usersRouter.put(
     if (password && password.length > 0) updateData.password = await bcrypt.hash(password, 10);
 
     const user = await prisma.$transaction(async (tx) => {
-      const updated = await tx.user.update({
+      const updated = await tx.users.update({
         where: { id },
         data: {
           ...updateData,
@@ -196,16 +196,16 @@ usersRouter.put(
       });
 
       if (driverId === null && existing.DriverProfile) {
-        await tx.driver.update({
+        await tx.drivers.update({
           where: { id: existing.DriverProfile.id },
           data: { user_id: null },
         });
       } else if (typeof driverId === 'string' && driverId.length > 0) {
-        const driver = await tx.driver.findFirst({
+        const driver = await tx.drivers.findFirst({
           where: { id: driverId, company_id: auth.company_id },
         });
         if (!driver) throw new Error('Driver not found');
-        await tx.driver.update({ where: { id: driverId }, data: { user_id: id } });
+        await tx.drivers.update({ where: { id: driverId }, data: { user_id: id } });
       }
 
       return updated;
@@ -225,7 +225,7 @@ usersRouter.patch(
 
     if (id === auth.sub) return fail(res, 403, 'Cannot change your own status');
 
-    const user = await prisma.user.findFirst({
+    const user = await prisma.users.findFirst({
       where: { id, company_id: auth.company_id },
       include: { UserRoles: { select: { role: true } } },
     });
@@ -234,14 +234,14 @@ usersRouter.patch(
     if (user.is_active) {
       const isAdmin = user.UserRoles.some((r) => r.role === 'ADMIN');
       if (isAdmin) {
-        const activeAdminCount = await prisma.userRole.count({
+        const activeAdminCount = await prisma.user_roles.count({
           where: { role: 'ADMIN', user: { company_id: auth.company_id, is_active: true } },
         });
         if (activeAdminCount <= 1) return fail(res, 403, 'Cannot deactivate the last active admin');
       }
     }
 
-    const updated = await prisma.user.update({
+    const updated = await prisma.users.update({
       where: { id },
       data: { is_active: !user.is_active },
       include: userInclude,

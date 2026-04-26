@@ -78,8 +78,8 @@ clientsRouter.get(
     }
 
     const [total, rows] = await Promise.all([
-      prisma.client.count({ where }),
-      prisma.client.findMany({
+      prisma.clients.count({ where }),
+      prisma.clients.findMany({
         where,
         orderBy: { [sortBy]: sortOrder } as Prisma.ClientOrderByWithRelationInput,
         skip: (page - 1) * limit,
@@ -114,7 +114,7 @@ clientsRouter.get(
     const q = normalizeText(req.query.q);
     if (!q) return fail(res, 400, 'q is required');
 
-    const rows = await prisma.client.findMany({
+    const rows = await prisma.clients.findMany({
       where: {
         company_id: companyId,
         OR: [
@@ -146,7 +146,7 @@ clientsRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const id = req.params.id;
-    const row = await prisma.client.findFirst({
+    const row = await prisma.clients.findFirst({
       where: { id, company_id: companyId },
       select: {
         id: true,
@@ -184,7 +184,7 @@ clientsRouter.post(
       return fail(res, 400, 'companyName, contactPerson, phone are required');
     }
 
-    const created = await prisma.client.create({
+    const created = await prisma.clients.create({
       data: {
         company_name: companyName,
         contact_person: contactPerson,
@@ -227,10 +227,10 @@ clientsRouter.put(
     const address = normalizeText(body.address);
     const notes = normalizeText(body.notes);
 
-    const existing = await prisma.client.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
+    const existing = await prisma.clients.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
     if (!existing) return fail(res, 404, 'Client not found');
 
-    const updated = await prisma.client.update({
+    const updated = await prisma.clients.update({
       where: { id },
       data: {
         ...(companyName ? { company_name: companyName } : {}),
@@ -263,9 +263,9 @@ clientsRouter.delete(
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const id = req.params.id;
-    const existing = await prisma.client.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
+    const existing = await prisma.clients.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
     if (!existing) return fail(res, 404, 'Client not found');
-    await prisma.client.delete({ where: { id } });
+    await prisma.clients.delete({ where: { id } });
     return ok(res, { ok: true });
   }),
 );
@@ -278,13 +278,13 @@ clientsRouter.get(
     const page = parsePage(req.query.page, 1);
     const limit = parseLimit(req.query.limit, 20, 100);
 
-    const client = await prisma.client.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
+    const client = await prisma.clients.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
     if (!client) return fail(res, 404, 'Client not found');
 
     const where: Prisma.OrderWhereInput = { company_id: companyId, client_id: id };
     const [total, rows] = await Promise.all([
-      prisma.order.count({ where }),
-      prisma.order.findMany({
+      prisma.orders.count({ where }),
+      prisma.orders.findMany({
         where,
         orderBy: { created_at: 'desc' },
         skip: (page - 1) * limit,

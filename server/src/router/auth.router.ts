@@ -39,9 +39,9 @@ authRouter.post('/signin', validate(signInSchema), async (req: Request, res: Res
     const password = ensureString((req.body as Record<string, unknown> | null)?.password);
     if (!email || !password) return fail(res, 400, 'email and password are required');
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email },
-      include: { UserRoles: true },
+      include: { user_roles: true },
     });
     if (!user) return fail(res, 401, 'Invalid email or password');
     if (!user.is_active) return fail(res, 403, 'User is inactive');
@@ -49,7 +49,7 @@ authRouter.post('/signin', validate(signInSchema), async (req: Request, res: Res
     const passwordOk = await bcrypt.compare(password, user.password);
     if (!passwordOk) return fail(res, 401, 'Invalid email or password');
 
-    const roles = user.UserRoles.map((r) => r.role);
+    const roles = user.user_roles.map((r) => r.role);
     const accessToken = signAccessToken({
       sub: user.id,
       email: user.email,
@@ -104,24 +104,28 @@ authRouter.post('/signup', validate(signUpSchema), async (req: Request, res: Res
     if (password.length < 6) return fail(res, 400, 'password must be at least 6 characters');
     if (!companyId && !companyName) return fail(res, 400, 'company_id or company_name is required');
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.users.findUnique({ where: { email } });
     if (existing) return fail(res, 409, 'Email already in use');
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const created = await prisma.user.create({
+    const created = await prisma.users.create({
       data: {
+        id: randomUUID(),
         email,
         password: passwordHash,
         first_name: firstName,
         last_name: lastName,
-        company: companyId ? { connect: { id: companyId } } : { create: { name: companyName as string } },
-        UserRoles: { create: [{ role: 'ADMIN' }] },
+        updated_at: new Date(),
+        companies: companyId
+          ? { connect: { id: companyId } }
+          : { create: { id: randomUUID(), name: companyName as string, updated_at: new Date() } },
+        user_roles: { create: [{ id: randomUUID(), role: 'ADMIN', updated_at: new Date() }] },
       },
-      include: { UserRoles: true },
+      include: { user_roles: true },
     });
 
-    const roles = created.UserRoles.map((r) => r.role);
+    const roles = created.user_roles.map((r) => r.role);
     const accessToken = signAccessToken({
       sub: created.id,
       email: created.email,
@@ -170,12 +174,12 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
   if (!refreshToken) return fail(res, 401, 'Refresh token required');
   try {
     const payload = verifyRefreshToken(refreshToken);
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { id: payload.sub },
-      include: { UserRoles: true },
+      include: { user_roles: true },
     });
     if (!user || !user.is_active) return fail(res, 401, 'User not found or inactive');
-    const roles = user.UserRoles.map((r) => r.role);
+    const roles = user.user_roles.map((r) => r.role);
     const accessToken = signAccessToken({
       sub: user.id,
       email: user.email,
@@ -196,9 +200,9 @@ authRouter.post('/logout', (req, res) => {
 authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
   const auth = (req as AuthenticatedRequest).auth;
   try {
-    const user = await prisma.user.findFirst({
+    const user = await prisma.users.findFirst({
       where: { id: auth.sub, company_id: auth.company_id },
-      include: { UserRoles: true, company: true },
+      include: { user_roles: true, companies: true },
     });
     if (!user) return fail(res, 404, 'User not found');
 
@@ -207,8 +211,8 @@ authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
       email: user.email,
       first_name: user.first_name,
       last_name: user.last_name,
-      company: { id: user.company.id, name: user.company.name },
-      roles: user.UserRoles.map((r) => r.role),
+      company: { id: user.companies.id, name: user.companies.name },
+      roles: user.user_roles.map((r) => r.role),
     });
   } catch (err) {
     const message =
@@ -232,7 +236,7 @@ authRouter.patch('/password', requireAuth, async (req: Request, res: Response) =
     }
 
     const userId = (req as AuthenticatedRequest).auth.sub;
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { id: userId },
       select: { id: true, password: true },
     });
@@ -242,7 +246,7 @@ authRouter.patch('/password', requireAuth, async (req: Request, res: Response) =
     if (!passwordOk) return fail(res, 400, 'Current password is incorrect');
 
     const newHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({ where: { id: userId }, data: { password: newHash } });
+    await prisma.users.update({ where: { id: userId }, data: { password: newHash } });
 
     return ok(res, { success: true });
   } catch (err) {

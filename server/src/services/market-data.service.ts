@@ -35,7 +35,7 @@ async function fetchExchangeRates(): Promise<void> {
   const filtered = response.data.filter((r) => TRACKED_CURRENCIES.includes(r.cc));
   if (filtered.length === 0) throw new Error('NBU API returned empty data');
 
-  await prisma.exchangeRate.createMany({
+  await prisma.exchange_rates.createMany({
     data: filtered.map((r) => ({ currency: r.cc, rate: r.rate })),
   });
 
@@ -103,7 +103,7 @@ async function fetchFuelPricesFromAutoRia(): Promise<void> {
     throw new Error(`auto.ria.com: no fuel prices found for region "${region}"`);
   }
 
-  await prisma.fuelPrice.createMany({ data: entries });
+  await prisma.fuel_prices.createMany({ data: entries });
   console.log(
     `[market-data] Fuel prices from auto.ria.com (${region}): ` +
     entries.map((e) => `${e.fuel_type}=${e.price}`).join(', '),
@@ -129,7 +129,7 @@ export async function saveFuelPricesManually(
 
   if (entries.length === 0) throw new Error('No valid prices provided');
 
-  await prisma.fuelPrice.createMany({ data: entries });
+  await prisma.fuel_prices.createMany({ data: entries });
   console.log(`[market-data] Fuel prices saved manually: ${entries.map((e) => `${e.fuel_type}=${e.price}`).join(', ')}`);
 }
 

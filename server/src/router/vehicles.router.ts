@@ -125,8 +125,8 @@ vehiclesRouter.get(
     }
 
     const [total, rows] = await Promise.all([
-      prisma.vehicle.count({ where }),
-      prisma.vehicle.findMany({
+      prisma.vehicles.count({ where }),
+      prisma.vehicles.findMany({
         where,
         orderBy: { [sortBy]: sortOrder } as Prisma.VehicleOrderByWithRelationInput,
         skip: (page - 1) * limit,
@@ -150,7 +150,7 @@ vehiclesRouter.get(
   '/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const row = await prisma.vehicle.findFirst({
+    const row = await prisma.vehicles.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: vehicleSelect,
     });
@@ -168,7 +168,7 @@ vehiclesRouter.get(
     const page = parsePage(req.query.page, 1);
     const limit = parseLimit(req.query.limit, 10, 50);
 
-    const vehicle = await prisma.vehicle.findFirst({
+    const vehicle = await prisma.vehicles.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true },
     });
@@ -176,8 +176,8 @@ vehiclesRouter.get(
 
     const where: Prisma.OrderWhereInput = { company_id: companyId, vehicle_id: req.params.id };
     const [total, rows] = await Promise.all([
-      prisma.order.count({ where }),
-      prisma.order.findMany({
+      prisma.orders.count({ where }),
+      prisma.orders.findMany({
         where,
         orderBy: { created_at: 'desc' },
         skip: (page - 1) * limit,
@@ -252,7 +252,7 @@ vehiclesRouter.post(
       return fail(res, 400, `fuelType must be one of: ${FUEL_TYPES.join(', ')}`);
     }
 
-    const created = await prisma.vehicle.create({
+    const created = await prisma.vehicles.create({
       data: {
         plate_number: plateNumber,
         type,
@@ -284,7 +284,7 @@ vehiclesRouter.put(
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
 
-    const existing = await prisma.vehicle.findFirst({
+    const existing = await prisma.vehicles.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true },
     });
@@ -308,7 +308,7 @@ vehiclesRouter.put(
       return fail(res, 400, `fuelType must be one of: ${FUEL_TYPES.join(', ')}`);
     }
 
-    const updated = await prisma.vehicle.update({
+    const updated = await prisma.vehicles.update({
       where: { id: req.params.id },
       data: {
         ...(plateNumber ? { plate_number: plateNumber } : {}),
@@ -340,7 +340,7 @@ vehiclesRouter.patch(
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
 
-    const existing = await prisma.vehicle.findFirst({
+    const existing = await prisma.vehicles.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true, is_available: true },
     });
@@ -348,7 +348,7 @@ vehiclesRouter.patch(
 
     const isAvailable = typeof body.isAvailable === 'boolean' ? body.isAvailable : !existing.is_available;
 
-    const updated = await prisma.vehicle.update({
+    const updated = await prisma.vehicles.update({
       where: { id: req.params.id },
       data: { is_available: isAvailable },
       select: vehicleSelect,
@@ -365,12 +365,12 @@ vehiclesRouter.delete(
   authorize(['ADMIN']),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const existing = await prisma.vehicle.findFirst({
+    const existing = await prisma.vehicles.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true },
     });
     if (!existing) return fail(res, 404, 'Vehicle not found');
-    await prisma.vehicle.delete({ where: { id: req.params.id } });
+    await prisma.vehicles.delete({ where: { id: req.params.id } });
     return ok(res, { ok: true });
   }),
 );

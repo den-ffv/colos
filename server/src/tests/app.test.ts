@@ -11,36 +11,29 @@ vi.mock('../utils/prisma', () => {
     update: vi.fn(),
   };
 
+  const orderModel = { count: vi.fn(), findMany: vi.fn(), groupBy: vi.fn(), aggregate: vi.fn() };
+  const vehicleModel = { count: vi.fn(), findMany: vi.fn() };
+  const driverModel = { findMany: vi.fn(), count: vi.fn() };
+  const clientModel = { findMany: vi.fn(), count: vi.fn(), create: vi.fn(), findUnique: vi.fn() };
+  const carrierModel = { findMany: vi.fn(), count: vi.fn() };
+  const companyModel = { findFirst: vi.fn() };
+
   return {
     prisma: {
       user: userModel,
       users: userModel,
-      company: {
-        findFirst: vi.fn(),
-      },
-      order: {
-        count: vi.fn(),
-        findMany: vi.fn(),
-        groupBy: vi.fn(),
-        aggregate: vi.fn(),
-      },
-      vehicle: {
-        count: vi.fn(),
-        findMany: vi.fn(),
-      },
-      driver: {
-        findMany: vi.fn(),
-      },
-      client: {
-        findMany: vi.fn(),
-        count: vi.fn(),
-        create: vi.fn(),
-        findUnique: vi.fn(),
-      },
-      carrier: {
-        findMany: vi.fn(),
-        count: vi.fn(),
-      },
+      company: companyModel,
+      companies: companyModel,
+      order: orderModel,
+      orders: orderModel,
+      vehicle: vehicleModel,
+      vehicles: vehicleModel,
+      driver: driverModel,
+      drivers: driverModel,
+      client: clientModel,
+      clients: clientModel,
+      carrier: carrierModel,
+      carriers: carrierModel,
       notifications: {
         findMany: vi.fn(),
         count: vi.fn(),

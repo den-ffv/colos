@@ -19,7 +19,7 @@ marketDataRouter.get(
 
     const latest = await Promise.all(
       currencies.map((cc) =>
-        prisma.exchangeRate.findFirst({
+        prisma.exchange_rates.findFirst({
           where: { currency: cc },
           orderBy: { fetched_at: 'desc' },
         }),
@@ -37,7 +37,7 @@ marketDataRouter.get(
     const currency = String(req.query.currency ?? 'USD').toUpperCase();
     const limit = Math.min(Number(req.query.limit ?? 30), 100);
 
-    const history = await prisma.exchangeRate.findMany({
+    const history = await prisma.exchange_rates.findMany({
       where: { currency },
       orderBy: { fetched_at: 'desc' },
       take: limit,
@@ -56,7 +56,7 @@ marketDataRouter.get(
 
     const latest = await Promise.all(
       fuelTypes.map((ft) =>
-        prisma.fuelPrice.findFirst({
+        prisma.fuel_prices.findFirst({
           where: { fuel_type: ft },
           orderBy: { fetched_at: 'desc' },
         }),
@@ -74,7 +74,7 @@ marketDataRouter.get(
     const fuelType = String(req.query.type ?? 'DIESEL');
     const limit = Math.min(Number(req.query.limit ?? 30), 100);
 
-    const history = await prisma.fuelPrice.findMany({
+    const history = await prisma.fuel_prices.findMany({
       where: { fuel_type: fuelType as any },
       orderBy: { fetched_at: 'desc' },
       take: limit,

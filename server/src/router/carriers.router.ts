@@ -119,8 +119,8 @@ carriersRouter.get(
     }
 
     const [total, rows] = await Promise.all([
-      prisma.carrier.count({ where }),
-      prisma.carrier.findMany({
+      prisma.carriers.count({ where }),
+      prisma.carriers.findMany({
         where,
         orderBy: { [sortBy]: sortOrder } as Prisma.CarrierOrderByWithRelationInput,
         skip: (page - 1) * limit,
@@ -144,7 +144,7 @@ carriersRouter.get(
   '/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const row = await prisma.carrier.findFirst({
+    const row = await prisma.carriers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: carrierSelect,
     });
@@ -162,7 +162,7 @@ carriersRouter.get(
     const page = parsePage(req.query.page, 1);
     const limit = parseLimit(req.query.limit, 10, 50);
 
-    const carrier = await prisma.carrier.findFirst({
+    const carrier = await prisma.carriers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true },
     });
@@ -170,8 +170,8 @@ carriersRouter.get(
 
     const where: Prisma.OrderWhereInput = { company_id: companyId, carrier_id: req.params.id };
     const [total, rows] = await Promise.all([
-      prisma.order.count({ where }),
-      prisma.order.findMany({
+      prisma.orders.count({ where }),
+      prisma.orders.findMany({
         where,
         orderBy: { created_at: 'desc' },
         skip: (page - 1) * limit,
@@ -238,7 +238,7 @@ carriersRouter.post(
 
     const rating = toFloat(body.rating) ?? 5.0;
 
-    const created = await prisma.carrier.create({
+    const created = await prisma.carriers.create({
       data: {
         company_name: companyName,
         contact_person: contactPerson,
@@ -268,7 +268,7 @@ carriersRouter.put(
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
 
-    const existing = await prisma.carrier.findFirst({
+    const existing = await prisma.carriers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true },
     });
@@ -284,7 +284,7 @@ carriersRouter.put(
 
     const rating = toFloat(body.rating);
 
-    const updated = await prisma.carrier.update({
+    const updated = await prisma.carriers.update({
       where: { id: req.params.id },
       data: {
         ...(normalizeText(body.companyName ?? body.company_name) ? { company_name: normalizeText(body.companyName ?? body.company_name)! } : {}),
@@ -314,7 +314,7 @@ carriersRouter.patch(
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
 
-    const existing = await prisma.carrier.findFirst({
+    const existing = await prisma.carriers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true, is_available: true },
     });
@@ -322,7 +322,7 @@ carriersRouter.patch(
 
     const isAvailable = typeof body.isAvailable === 'boolean' ? body.isAvailable : !existing.is_available;
 
-    const updated = await prisma.carrier.update({
+    const updated = await prisma.carriers.update({
       where: { id: req.params.id },
       data: { is_available: isAvailable },
       select: carrierSelect,
@@ -339,12 +339,12 @@ carriersRouter.delete(
   authorize(['ADMIN']),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const existing = await prisma.carrier.findFirst({
+    const existing = await prisma.carriers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true },
     });
     if (!existing) return fail(res, 404, 'Carrier not found');
-    await prisma.carrier.delete({ where: { id: req.params.id } });
+    await prisma.carriers.delete({ where: { id: req.params.id } });
     return ok(res, { ok: true });
   }),
 );

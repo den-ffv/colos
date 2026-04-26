@@ -119,8 +119,8 @@ driversRouter.get(
     }
 
     const [total, rows] = await Promise.all([
-      prisma.driver.count({ where }),
-      prisma.driver.findMany({
+      prisma.drivers.count({ where }),
+      prisma.drivers.findMany({
         where,
         orderBy: { [sortBy]: sortOrder } as Prisma.DriverOrderByWithRelationInput,
         skip: (page - 1) * limit,
@@ -144,7 +144,7 @@ driversRouter.get(
   '/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const row = await prisma.driver.findFirst({
+    const row = await prisma.drivers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: driverSelect,
     });
@@ -162,7 +162,7 @@ driversRouter.get(
     const page = parsePage(req.query.page, 1);
     const limit = parseLimit(req.query.limit, 10, 50);
 
-    const driver = await prisma.driver.findFirst({
+    const driver = await prisma.drivers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true },
     });
@@ -170,8 +170,8 @@ driversRouter.get(
 
     const where: Prisma.OrderWhereInput = { company_id: companyId, driver_id: req.params.id };
     const [total, rows] = await Promise.all([
-      prisma.order.count({ where }),
-      prisma.order.findMany({
+      prisma.orders.count({ where }),
+      prisma.orders.findMany({
         where,
         orderBy: { created_at: 'desc' },
         skip: (page - 1) * limit,
@@ -230,7 +230,7 @@ driversRouter.post(
       return fail(res, 400, `payType must be one of: ${PAY_TYPES.join(', ')}`);
     }
 
-    const created = await prisma.driver.create({
+    const created = await prisma.drivers.create({
       data: {
         first_name: firstName,
         last_name: lastName,
@@ -259,7 +259,7 @@ driversRouter.put(
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
 
-    const existing = await prisma.driver.findFirst({
+    const existing = await prisma.drivers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true },
     });
@@ -277,7 +277,7 @@ driversRouter.put(
       return fail(res, 400, `payType must be one of: ${PAY_TYPES.join(', ')}`);
     }
 
-    const updated = await prisma.driver.update({
+    const updated = await prisma.drivers.update({
       where: { id: req.params.id },
       data: {
         ...(firstName ? { first_name: firstName } : {}),
@@ -306,7 +306,7 @@ driversRouter.patch(
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
 
-    const existing = await prisma.driver.findFirst({
+    const existing = await prisma.drivers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true, is_available: true },
     });
@@ -314,7 +314,7 @@ driversRouter.patch(
 
     const isAvailable = typeof body.isAvailable === 'boolean' ? body.isAvailable : !existing.is_available;
 
-    const updated = await prisma.driver.update({
+    const updated = await prisma.drivers.update({
       where: { id: req.params.id },
       data: { is_available: isAvailable },
       select: driverSelect,
@@ -331,12 +331,12 @@ driversRouter.delete(
   authorize(['ADMIN']),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const existing = await prisma.driver.findFirst({
+    const existing = await prisma.drivers.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true },
     });
     if (!existing) return fail(res, 404, 'Driver not found');
-    await prisma.driver.delete({ where: { id: req.params.id } });
+    await prisma.drivers.delete({ where: { id: req.params.id } });
     return ok(res, { ok: true });
   }),
 );

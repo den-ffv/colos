@@ -84,7 +84,7 @@ async function generateOrderNumber(companyId: string): Promise<string> {
   const today = new Date();
   const ds = today.toISOString().slice(0, 10).replace(/-/g, '');
   const prefix = `ORD-${ds}-`;
-  const last = await prisma.order.findFirst({
+  const last = await prisma.orders.findFirst({
     where: { company_id: companyId, order_number: { startsWith: prefix } },
     orderBy: { order_number: 'desc' },
     select: { order_number: true },
@@ -252,7 +252,7 @@ ordersRouter.get(
   authorize(['DRIVER']),
   asyncHandler(async (req: Request, res: Response) => {
     const auth = (req as AuthenticatedRequest).auth;
-    const driver = await prisma.driver.findFirst({
+    const driver = await prisma.drivers.findFirst({
       where: { user_id: auth.sub, company_id: auth.company_id },
       select: { id: true },
     });
@@ -263,8 +263,8 @@ ordersRouter.get(
     const where = { company_id: auth.company_id, driver_id: driver.id };
 
     const [total, rows] = await Promise.all([
-      prisma.order.count({ where }),
-      prisma.order.findMany({
+      prisma.orders.count({ where }),
+      prisma.orders.findMany({
         where,
         orderBy: { created_at: 'desc' },
         skip: (page - 1) * limit,
@@ -346,8 +346,8 @@ ordersRouter.get(
     }
 
     const [total, rows] = await Promise.all([
-      prisma.order.count({ where }),
-      prisma.order.findMany({
+      prisma.orders.count({ where }),
+      prisma.orders.findMany({
         where,
         orderBy: { [sortBy]: sortOrder } as Prisma.OrderOrderByWithRelationInput,
         skip: (page - 1) * limit,
@@ -372,29 +372,29 @@ ordersRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
     const [clients, drivers, vehicles, carriers, activeOrders] = await Promise.all([
-      prisma.client.findMany({
+      prisma.clients.findMany({
         where: { company_id: companyId },
         orderBy: { company_name: 'asc' },
         select: { id: true, company_name: true, contact_person: true, phone: true, email: true, address: true },
         take: 500,
       }),
-      prisma.driver.findMany({
+      prisma.drivers.findMany({
         where: { company_id: companyId, is_available: true, user_id: { not: null } },
         orderBy: { last_name: 'asc' },
         select: { id: true, first_name: true, last_name: true, pay_rate: true, pay_type: true },
       }),
-      prisma.vehicle.findMany({
+      prisma.vehicles.findMany({
         where: { company_id: companyId, is_available: true },
         orderBy: { plate_number: 'asc' },
         select: { id: true, plate_number: true, type: true, capacity: true, fuel_consumption: true, fuel_type: true },
       }),
-      prisma.carrier.findMany({
+      prisma.carriers.findMany({
         where: { company_id: companyId, is_available: true },
         orderBy: { company_name: 'asc' },
         select: { id: true, company_name: true },
       }),
       // Active orders to detect which drivers/vehicles are currently busy
-      prisma.order.findMany({
+      prisma.orders.findMany({
         where: {
           company_id: companyId,
           status: { in: ['CONFIRMED', 'IN_TRANSIT'] },
@@ -458,7 +458,7 @@ ordersRouter.get(
   '/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const row = await prisma.order.findFirst({
+    const row = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: orderSelect,
     });
@@ -493,7 +493,7 @@ ordersRouter.post(
     }
 
     // Verify client belongs to company
-    const client = await prisma.client.findFirst({ where: { id: clientId, company_id: companyId }, select: { id: true } });
+    const client = await prisma.clients.findFirst({ where: { id: clientId, company_id: companyId }, select: { id: true } });
     if (!client) return fail(res, 400, 'Client not found');
 
     const orderNumber = await generateOrderNumber(companyId);
@@ -506,7 +506,7 @@ ordersRouter.post(
       clientPrice,
     });
 
-    const created = await prisma.order.create({
+    const created = await prisma.orders.create({
       data: {
         order_number: orderNumber,
         client_id: clientId,
@@ -560,7 +560,7 @@ ordersRouter.put(
     const companyId = getCompanyId(req);
     const body = (req.body as Record<string, unknown> | null) ?? {};
 
-    const existing = await prisma.order.findFirst({
+    const existing = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true, status: true, execution_type: true, client_price: true, estimated_fuel_cost: true, estimated_salary_cost: true, carrier_agreed_price: true },
     });
@@ -608,7 +608,7 @@ ordersRouter.put(
       ...financials,
     };
 
-    const updated = await prisma.order.update({
+    const updated = await prisma.orders.update({
       where: { id: req.params.id },
       data,
       select: orderSelect,
@@ -634,14 +634,14 @@ ordersRouter.patch(
       return fail(res, 400, 'Invalid status');
     }
 
-    const existing = await prisma.order.findFirst({
+    const existing = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true, status: true, driver_id: true },
     });
 
     // DRIVER може змінювати статус тільки для замовлень, де він призначений
     if (auth.roles.includes('DRIVER') && !auth.roles.includes('ADMIN') && !auth.roles.includes('LOGIST')) {
-      const driverProfile = await prisma.driver.findFirst({
+      const driverProfile = await prisma.drivers.findFirst({
         where: { user_id: auth.sub, company_id: companyId },
         select: { id: true },
       });
@@ -671,7 +671,7 @@ ordersRouter.patch(
     // When DELIVERED, automatically move to AWAITING_FINAL_PAYMENT
     const finalStatus: OrderStatus = newStatus === 'DELIVERED' ? 'AWAITING_FINAL_PAYMENT' : newStatus;
 
-    const updated = await prisma.order.update({
+    const updated = await prisma.orders.update({
       where: { id: req.params.id },
       data: {
         status: finalStatus,
@@ -689,7 +689,7 @@ ordersRouter.patch(
 
     // Send driver email when order is confirmed
     if (newStatus === 'CONFIRMED' && updated.driver_id) {
-      prisma.driver.findFirst({
+      prisma.drivers.findFirst({
         where: { id: updated.driver_id, company_id: companyId },
         select: { first_name: true, last_name: true, user_id: true, user: { select: { email: true } } },
       }).then((driver) => {
@@ -764,7 +764,7 @@ ordersRouter.post(
     const auth = (req as AuthenticatedRequest).auth;
     const companyId = auth.company_id;
 
-    const order = await prisma.order.findFirst({
+    const order = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true, status: true, driver_id: true },
     });
@@ -772,7 +772,7 @@ ordersRouter.post(
     if (order.status !== 'CONFIRMED') return fail(res, 400, `Cannot accept order with status ${order.status}`);
 
     if (auth.roles.includes('DRIVER') && !auth.roles.includes('ADMIN') && !auth.roles.includes('LOGIST')) {
-      const driverProfile = await prisma.driver.findFirst({
+      const driverProfile = await prisma.drivers.findFirst({
         where: { user_id: auth.sub, company_id: companyId },
         select: { id: true },
       });
@@ -781,7 +781,7 @@ ordersRouter.post(
       }
     }
 
-    const updated = await prisma.order.update({
+    const updated = await prisma.orders.update({
       where: { id: req.params.id },
       data: { status: 'DRIVER_ACCEPTED' },
       select: orderSelect,
@@ -820,7 +820,7 @@ ordersRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
 
-    const order = await prisma.order.findFirst({
+    const order = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: {
         id: true,
@@ -835,7 +835,7 @@ ordersRouter.post(
       return fail(res, 400, `Cannot request prepayment from status ${order.status}`);
     }
 
-    const updated = await prisma.order.update({
+    const updated = await prisma.orders.update({
       where: { id: req.params.id },
       data: { status: 'AWAITING_PREPAYMENT' },
       select: orderSelect,
@@ -853,7 +853,7 @@ ordersRouter.post(
     const invoiceNumber = `INV-${order.order_number}-PRE`;
     const dueDays = 7;
 
-    prisma.invoice.create({
+    prisma.invoices.create({
       data: {
         order_id: order.id,
         company_id: companyId,
@@ -887,7 +887,7 @@ ordersRouter.post(
     const amount = typeof req.body?.amount === 'number' ? req.body.amount : null;
     if (!amount || amount <= 0) return fail(res, 400, 'amount must be a positive number');
 
-    const order = await prisma.order.findFirst({
+    const order = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true, status: true },
     });
@@ -896,7 +896,7 @@ ordersRouter.post(
       return fail(res, 400, `Cannot mark prepaid from status ${order.status}`);
     }
 
-    const updated = await prisma.order.update({
+    const updated = await prisma.orders.update({
       where: { id: req.params.id },
       data: {
         status: 'PREPAID',
@@ -958,7 +958,7 @@ ordersRouter.post(
     const amount = typeof req.body?.amount === 'number' ? req.body.amount : null;
     if (!amount || amount <= 0) return fail(res, 400, 'amount must be a positive number');
 
-    const order = await prisma.order.findFirst({
+    const order = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: {
         id: true,
@@ -976,7 +976,7 @@ ordersRouter.post(
 
     const totalPaid = (order.prepaid_amount ?? 0) + amount;
 
-    const updated = await prisma.order.update({
+    const updated = await prisma.orders.update({
       where: { id: req.params.id },
       data: {
         status: 'COMPLETED',
@@ -1025,11 +1025,11 @@ ordersRouter.post(
     // Update Invoice records + send completion email (fire-and-forget)
     const prepaidAmount = order.prepaid_amount ?? 0;
     Promise.all([
-      prisma.invoice.updateMany({
+      prisma.invoices.updateMany({
         where: { order_id: order.id, type: 'PREPAYMENT' },
         data: { status: 'PAID', paid_at: order.prepaid_at ?? new Date() },
       }),
-      prisma.invoice.create({
+      prisma.invoices.create({
         data: {
           order_id: order.id,
           company_id: companyId,
@@ -1066,12 +1066,12 @@ ordersRouter.delete(
   authorize(['ADMIN']),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const existing = await prisma.order.findFirst({
+    const existing = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       select: { id: true, order_number: true },
     });
     if (!existing) return fail(res, 404, 'Order not found');
-    await prisma.order.delete({ where: { id: req.params.id } });
+    await prisma.orders.delete({ where: { id: req.params.id } });
     emitOrderUpdated(companyId, { orderId: req.params.id, orderNumber: existing.order_number, action: 'deleted' });
     return ok(res, { ok: true });
   }),
@@ -1083,7 +1083,7 @@ ordersRouter.get(
   '/:id/pdf',
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const order = await prisma.order.findFirst({
+    const order = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       include: {
         client: true,
