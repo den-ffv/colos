@@ -123,7 +123,7 @@ const orderSelect = {
   id: true,
   order_number: true,
   client_id: true,
-  client: { select: { id: true, company_name: true, contact_person: true } },
+  clients: { select: { id: true, company_name: true, contact_person: true } },
   product_type: true,
   quantity: true,
   unit: true,
@@ -136,13 +136,13 @@ const orderSelect = {
   status: true,
   execution_type: true,
   driver_id: true,
-  driver: { select: { id: true, first_name: true, last_name: true } },
+  drivers: { select: { id: true, first_name: true, last_name: true } },
   vehicle_id: true,
-  vehicle: { select: { id: true, plate_number: true, type: true } },
+  vehicles: { select: { id: true, plate_number: true, type: true } },
   estimated_fuel_cost: true,
   estimated_salary_cost: true,
   carrier_id: true,
-  carrier: { select: { id: true, company_name: true } },
+  carriers: { select: { id: true, company_name: true } },
   carrier_agreed_price: true,
   carrier_paid: true,
   carrier_vehicle_info: true,
@@ -159,7 +159,7 @@ const orderSelect = {
   final_paid_at: true,
   total_paid: true,
   assigned_manager_id: true,
-  assigned_manager: { select: { id: true, first_name: true, last_name: true, email: true } },
+  users: { select: { id: true, first_name: true, last_name: true, email: true } },
   notes: true,
   company_id: true,
   created_at: true,
@@ -173,7 +173,7 @@ function orderDto(o: OrderRow) {
     id: o.id,
     orderNumber: o.order_number,
     clientId: o.client_id,
-    client: o.client ? { id: o.client.id, companyName: o.client.company_name, contactPerson: o.client.contact_person } : null,
+    client: o.clients ? { id: o.clients.id, companyName: o.clients.company_name, contactPerson: o.clients.contact_person } : null,
     productType: o.product_type ?? undefined,
     quantity: o.quantity ?? undefined,
     unit: o.unit ?? undefined,
@@ -186,13 +186,13 @@ function orderDto(o: OrderRow) {
     status: o.status,
     executionType: o.execution_type,
     driverId: o.driver_id ?? undefined,
-    driver: o.driver ? { id: o.driver.id, name: `${o.driver.first_name} ${o.driver.last_name}` } : undefined,
+    driver: o.drivers ? { id: o.drivers.id, name: `${o.drivers.first_name} ${o.drivers.last_name}` } : undefined,
     vehicleId: o.vehicle_id ?? undefined,
-    vehicle: o.vehicle ? { id: o.vehicle.id, plateNumber: o.vehicle.plate_number, type: o.vehicle.type } : undefined,
+    vehicle: o.vehicles ? { id: o.vehicles.id, plateNumber: o.vehicles.plate_number, type: o.vehicles.type } : undefined,
     estimatedFuelCost: o.estimated_fuel_cost ?? undefined,
     estimatedSalaryCost: o.estimated_salary_cost ?? undefined,
     carrierId: o.carrier_id ?? undefined,
-    carrier: o.carrier ? { id: o.carrier.id, companyName: o.carrier.company_name } : undefined,
+    carrier: o.carriers ? { id: o.carriers.id, companyName: o.carriers.company_name } : undefined,
     carrierAgreedPrice: o.carrier_agreed_price ?? undefined,
     carrierPaid: o.carrier_paid,
     carrierVehicleInfo: o.carrier_vehicle_info ?? undefined,
@@ -209,11 +209,11 @@ function orderDto(o: OrderRow) {
     finalPaidAt: o.final_paid_at?.toISOString() ?? undefined,
     totalPaid: o.total_paid,
     assignedManagerId: o.assigned_manager_id,
-    assignedManager: o.assigned_manager
+    assignedManager: o.users
       ? {
-          id: o.assigned_manager.id,
-          name: `${o.assigned_manager.first_name} ${o.assigned_manager.last_name}`,
-          email: o.assigned_manager.email,
+          id: o.users.id,
+          name: `${o.users.first_name} ${o.users.last_name}`,
+          email: o.users.email,
         }
       : undefined,
     notes: o.notes ?? undefined,
@@ -226,7 +226,7 @@ function orderListDto(o: OrderRow) {
   return {
     id: o.id,
     orderNumber: o.order_number,
-    clientName: o.client?.company_name ?? '—',
+    clientName: o.clients?.company_name ?? '—',
     status: o.status,
     executionType: o.execution_type,
     pickupAddress: o.pickup_address,
@@ -238,8 +238,8 @@ function orderListDto(o: OrderRow) {
     margin: o.margin,
     marginPercent: o.margin_percent,
     clientPaid: o.client_paid,
-    driverName: o.driver ? `${o.driver.first_name} ${o.driver.last_name}` : undefined,
-    carrierName: o.carrier?.company_name ?? undefined,
+    driverName: o.drivers ? `${o.drivers.first_name} ${o.drivers.last_name}` : undefined,
+    carrierName: o.carriers?.company_name ?? undefined,
     createdAt: o.created_at.toISOString(),
     updatedAt: o.updated_at.toISOString(),
   };
@@ -280,8 +280,8 @@ ordersRouter.get(
           product_type: true,
           weight: true,
           notes: true,
-          client: { select: { id: true, company_name: true, contact_person: true, phone: true } },
-          vehicle: { select: { id: true, plate_number: true, type: true } },
+          clients: { select: { id: true, company_name: true, contact_person: true, phone: true } },
+          vehicles: { select: { id: true, plate_number: true, type: true } },
           created_at: true,
           updated_at: true,
         },
@@ -301,10 +301,10 @@ ordersRouter.get(
         productType: o.product_type ?? undefined,
         weight: o.weight ?? undefined,
         notes: o.notes ?? undefined,
-        client: o.client
-          ? { id: o.client.id, companyName: o.client.company_name, contactPerson: o.client.contact_person, phone: o.client.phone }
+        client: o.clients
+          ? { id: o.clients.id, companyName: o.clients.company_name, contactPerson: o.clients.contact_person, phone: o.clients.phone }
           : null,
-        vehicle: o.vehicle ? { plateNumber: o.vehicle.plate_number, type: o.vehicle.type } : undefined,
+        vehicle: o.vehicles ? { plateNumber: o.vehicles.plate_number, type: o.vehicles.type } : undefined,
         createdAt: o.created_at.toISOString(),
         updatedAt: o.updated_at.toISOString(),
       })),
@@ -341,7 +341,7 @@ ordersRouter.get(
         { order_number: { contains: q, mode: 'insensitive' } },
         { pickup_address: { contains: q, mode: 'insensitive' } },
         { delivery_address: { contains: q, mode: 'insensitive' } },
-        { client: { company_name: { contains: q, mode: 'insensitive' } } },
+        { clients: { company_name: { contains: q, mode: 'insensitive' } } },
       ];
     }
 
@@ -583,7 +583,7 @@ ordersRouter.put(
     });
 
     const data: Prisma.OrderUpdateInput = {
-      ...(normalizeText(body.clientId) ? { client: { connect: { id: body.clientId as string } } } : {}),
+      ...(normalizeText(body.clientId) ? { clients: { connect: { id: body.clientId as string } } } : {}),
       ...(normalizeText(body.productType) !== undefined ? { product_type: normalizeText(body.productType) } : {}),
       ...(body.quantity !== undefined ? { quantity: toFloat(body.quantity) } : {}),
       ...(normalizeText(body.unit) !== undefined ? { unit: normalizeText(body.unit) } : {}),
@@ -691,11 +691,11 @@ ordersRouter.patch(
     if (newStatus === 'CONFIRMED' && updated.driver_id) {
       prisma.drivers.findFirst({
         where: { id: updated.driver_id, company_id: companyId },
-        select: { first_name: true, last_name: true, user_id: true, user: { select: { email: true } } },
+        select: { first_name: true, last_name: true, user_id: true, users: { select: { email: true } } },
       }).then((driver) => {
-        if (!driver?.user?.email) return;
+        if (!driver?.users?.email) return;
         sendDriverAssigned({
-          to: driver.user.email,
+          to: driver.users.email,
           driverName: `${driver.first_name} ${driver.last_name}`,
           contractNumber: updated.order_number,
           pickupAddress: updated.pickup_address,
@@ -720,12 +720,12 @@ ordersRouter.patch(
     if (finalStatus === 'IN_TRANSIT') {
       prisma.orders.findUnique({
         where: { id: req.params.id },
-        select: { client: { select: { email: true, company_name: true } }, pickup_address: true, delivery_address: true },
+        select: { clients: { select: { email: true, company_name: true } }, pickup_address: true, delivery_address: true },
       }).then((o) => {
         if (!o?.client?.email) return;
         sendOrderStatusUpdate({
-          to: o.client.email,
-          clientName: o.client.company_name,
+          to: o.clients.email,
+          clientName: o.clients.company_name,
           contractNumber: updated.order_number,
           status: 'IN_TRANSIT',
           pickupAddress: o.pickup_address,
@@ -737,12 +737,12 @@ ordersRouter.patch(
     if (newStatus === 'DELIVERED') {
       prisma.orders.findUnique({
         where: { id: req.params.id },
-        select: { client: { select: { email: true, company_name: true } }, pickup_address: true, delivery_address: true },
+        select: { clients: { select: { email: true, company_name: true } }, pickup_address: true, delivery_address: true },
       }).then((o) => {
         if (!o?.client?.email) return;
         sendOrderStatusUpdate({
-          to: o.client.email,
-          clientName: o.client.company_name,
+          to: o.clients.email,
+          clientName: o.clients.company_name,
           contractNumber: updated.order_number,
           status: 'DELIVERED',
           pickupAddress: o.pickup_address,
@@ -827,7 +827,7 @@ ordersRouter.post(
         status: true,
         order_number: true,
         client_price: true,
-        client: { select: { email: true, company_name: true } },
+        clients: { select: { email: true, company_name: true } },
       },
     });
     if (!order) return fail(res, 404, 'Order not found');
@@ -919,7 +919,7 @@ ordersRouter.post(
       select: {
         assigned_manager_id: true,
         order_number: true,
-        driver: { select: { user_id: true } },
+        drivers: { select: { user_id: true } },
       },
     }).then((o) => {
       if (!o) return;
@@ -932,9 +932,9 @@ ordersRouter.post(
           orderId: req.params.id,
         }),
       ];
-      if (o.driver?.user_id) {
+      if (o.drivers?.user_id) {
         tasks.push(NotificationService.create({
-          userId: o.driver.user_id,
+          userId: o.drivers.user_id,
           type: 'PREPAYMENT_RECEIVED',
           title: `Аванс отримано — ${o.order_number}`,
           body: 'Ви можете виїжджати',
@@ -966,7 +966,7 @@ ordersRouter.post(
         order_number: true,
         prepaid_amount: true,
         prepaid_at: true,
-        client: { select: { email: true, company_name: true } },
+        clients: { select: { email: true, company_name: true } },
       },
     });
     if (!order) return fail(res, 404, 'Order not found');
@@ -1086,11 +1086,11 @@ ordersRouter.get(
     const order = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
       include: {
-        client: true,
-        driver: true,
-        vehicle: true,
-        carrier: true,
-        assigned_manager: { select: { first_name: true, last_name: true, email: true } },
+        clients: true,
+        drivers: true,
+        vehicles: true,
+        carriers: true,
+        users: { select: { first_name: true, last_name: true, email: true } },
       },
     });
     if (!order) return fail(res, 404, 'Order not found');
