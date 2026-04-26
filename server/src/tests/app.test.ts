@@ -3,41 +3,58 @@ import request from 'supertest';
 
 /* ── Мокуємо Prisma та bcrypt до імпорту app ─────────────── */
 
-vi.mock('../utils/prisma', () => ({
-  prisma: {
-    user: {
-      findUnique: vi.fn(),
-      findFirst: vi.fn(),
-      create: vi.fn(),
+vi.mock('../utils/prisma', () => {
+  const userModel = {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  };
+
+  return {
+    prisma: {
+      user: userModel,
+      users: userModel,
+      company: {
+        findFirst: vi.fn(),
+      },
+      order: {
+        count: vi.fn(),
+        findMany: vi.fn(),
+        groupBy: vi.fn(),
+        aggregate: vi.fn(),
+      },
+      vehicle: {
+        count: vi.fn(),
+        findMany: vi.fn(),
+      },
+      driver: {
+        findMany: vi.fn(),
+      },
+      client: {
+        findMany: vi.fn(),
+        count: vi.fn(),
+        create: vi.fn(),
+        findUnique: vi.fn(),
+      },
+      carrier: {
+        findMany: vi.fn(),
+        count: vi.fn(),
+      },
+      notifications: {
+        findMany: vi.fn(),
+        count: vi.fn(),
+        create: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      notification_preferences: {
+        findUnique: vi.fn(),
+        findMany: vi.fn(),
+        upsert: vi.fn(),
+      },
     },
-    company: {
-      findFirst: vi.fn(),
-    },
-    order: {
-      count: vi.fn(),
-      findMany: vi.fn(),
-      groupBy: vi.fn(),
-      aggregate: vi.fn(),
-    },
-    vehicle: {
-      count: vi.fn(),
-      findMany: vi.fn(),
-    },
-    driver: {
-      findMany: vi.fn(),
-    },
-    client: {
-      findMany: vi.fn(),
-      count: vi.fn(),
-      create: vi.fn(),
-      findUnique: vi.fn(),
-    },
-    carrier: {
-      findMany: vi.fn(),
-      count: vi.fn(),
-    },
-  },
-}));
+  };
+});
 
 vi.mock('../utils/redis', () => ({
   cacheGet: vi.fn().mockResolvedValue(null),
@@ -72,6 +89,7 @@ const mockUser = {
   company_id: 'company-uuid-001',
   is_active: true,
   UserRoles: [{ role: 'ADMIN' as const }],
+  user_roles: [{ role: 'ADMIN' as const }],
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -102,7 +120,7 @@ describe('POST /api/auth/signup', () => {
     (bcrypt.hash as MockedFn).mockResolvedValue('$2b$10$hashed');
     (prisma.user.create as MockedFn).mockResolvedValue({
       ...mockUser,
-      UserRoles: [{ role: 'ADMIN' }],
+      user_roles: [{ role: 'ADMIN' }],
     });
 
     const res = await request(app).post('/api/auth/signup').send({
@@ -311,5 +329,172 @@ describe('GET /api/orders/lookups', () => {
     expect(driver.payRate).toBe(8.5);
     expect(driver.payType).toBe('PER_KM');
     expect(driver.name).toBe('Олег Шевченко');
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   7. Notifications
+═══════════════════════════════════════════════════════════ */
+
+describe('GET /api/notifications', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('повертає сповіщення та unreadCount', async () => {
+    (prisma.user.findUnique as MockedFn).mockResolvedValue(mockUser);
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['ADMIN'],
+    });
+    (prisma.notifications.findMany as MockedFn).mockResolvedValue([
+      {
+        id: 'notif-001',
+        type: 'ORDER_CREATED',
+        title: 'Договір №123 створено',
+        body: 'Київ → Харків',
+        order_id: 'order-001',
+        is_read: false,
+        created_at: new Date('2026-04-26T10:00:00Z'),
+      },
+    ]);
+    (prisma.notifications.count as MockedFn).mockResolvedValue(1);
+
+    const res = await request(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.notifications).toHaveLength(1);
+    expect(res.body.data.notifications[0].type).toBe('ORDER_CREATED');
+    expect(res.body.data.unreadCount).toBe(1);
+  });
+});
+
+describe('PATCH /api/notifications/read', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('позначає всі сповіщення прочитаними', async () => {
+    (prisma.user.findUnique as MockedFn).mockResolvedValue(mockUser);
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['ADMIN'],
+    });
+    (prisma.notifications.updateMany as MockedFn).mockResolvedValue({ count: 3 });
+
+    const res = await request(app)
+      .patch('/api/notifications/read')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ all: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.success).toBe(true);
+  });
+});
+
+describe('GET /api/notifications/preferences', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('повертає збережені преференції', async () => {
+    (prisma.user.findUnique as MockedFn).mockResolvedValue(mockUser);
+    const token = signAccessToken({
+      sub: mockUser.id, email: mockUser.email,
+      company_id: mockUser.company_id, roles: ['ADMIN'],
+    });
+    (prisma.notification_preferences.findMany as MockedFn).mockResolvedValue([
+      { event_type: 'ORDER_CREATED', email_enabled: false, in_app_enabled: true },
+    ]);
+
+    const res = await request(app)
+      .get('/api/notifications/preferences')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].eventType).toBe('ORDER_CREATED');
+    expect(res.body.data[0].emailEnabled).toBe(false);
+  });
+});
+
+describe('PATCH /api/notifications/preferences', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('повертає 200 при валідному тілі', async () => {
+    (prisma.user.findUnique as MockedFn).mockResolvedValue(mockUser);
+    const token = signAccessToken({
+      sub: mockUser.id, email: mockUser.email,
+      company_id: mockUser.company_id, roles: ['ADMIN'],
+    });
+    (prisma.notification_preferences.upsert as MockedFn).mockResolvedValue({});
+
+    const res = await request(app)
+      .patch('/api/notifications/preferences')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ eventType: 'ORDER_CREATED', emailEnabled: false, inAppEnabled: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.success).toBe(true);
+  });
+
+  it('повертає 400 при невалідному eventType', async () => {
+    (prisma.user.findUnique as MockedFn).mockResolvedValue(mockUser);
+    const token = signAccessToken({
+      sub: mockUser.id, email: mockUser.email,
+      company_id: mockUser.company_id, roles: ['ADMIN'],
+    });
+
+    const res = await request(app)
+      .patch('/api/notifications/preferences')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ eventType: 'INVALID_TYPE', emailEnabled: true, inAppEnabled: true });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('PATCH /api/auth/password', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('повертає 400 при неправильному поточному паролі', async () => {
+    (prisma.user.findUnique as MockedFn).mockResolvedValue(mockUser);
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['ADMIN'],
+    });
+    (bcrypt.compare as MockedFn).mockResolvedValue(false);
+
+    const res = await request(app)
+      .patch('/api/auth/password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ currentPassword: 'wrongpass', newPassword: 'newpassword123' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/incorrect/i);
+  });
+
+  it('повертає 200 при правильному поточному паролі', async () => {
+    (prisma.user.findUnique as MockedFn).mockResolvedValue(mockUser);
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['ADMIN'],
+    });
+    (bcrypt.compare as MockedFn).mockResolvedValue(true);
+    (bcrypt.hash as MockedFn).mockResolvedValue('$2b$10$newhash');
+    (prisma.user.update as MockedFn).mockResolvedValue({ ...mockUser, password: '$2b$10$newhash' });
+
+    const res = await request(app)
+      .patch('/api/auth/password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ currentPassword: 'correctpass', newPassword: 'newpassword123' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.success).toBe(true);
   });
 });
