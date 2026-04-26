@@ -159,6 +159,7 @@ model orders {
   prepaid_at            DateTime?
   total_paid            Float         @default(0)
   invoices              invoices[]
+  notifications         notifications[]
   users                 users         @relation(fields: [assigned_manager_id], references: [id])
   carriers              carriers?     @relation(fields: [carrier_id], references: [id])
   clients               clients       @relation(fields: [client_id], references: [id])
@@ -180,20 +181,22 @@ model user_roles {
 }
 
 model users {
-  id          String       @id
-  email       String       @unique
-  password    String
-  company_id  String
-  created_at  DateTime     @default(now())
-  first_name  String
-  is_active   Boolean      @default(true)
-  last_name   String
-  ui_language UiLanguage   @default(UA)
-  updated_at  DateTime
-  drivers     drivers?
-  orders      orders[]
-  user_roles  user_roles[]
-  companies   companies    @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  id                         String                      @id
+  email                      String                      @unique
+  password                   String
+  company_id                 String
+  created_at                 DateTime                    @default(now())
+  first_name                 String
+  is_active                  Boolean                     @default(true)
+  last_name                  String
+  ui_language                UiLanguage                  @default(UA)
+  updated_at                 DateTime
+  drivers                    drivers?
+  orders                     orders[]
+  user_roles                 user_roles[]
+  notifications              notifications[]
+  notification_preferences   notification_preferences[]
+  companies                  companies                   @relation(fields: [company_id], references: [id], onDelete: Cascade)
 }
 
 model vehicles {
@@ -283,4 +286,42 @@ enum VehicleType {
   VAN
   CAR
   REFRIGERATOR
+}
+
+enum NotificationType {
+  ORDER_CREATED
+  DRIVER_ASSIGNED
+  DRIVER_ACCEPTED
+  STATUS_IN_TRANSIT
+  STATUS_DELIVERED
+  PREPAYMENT_REQUESTED
+  PREPAYMENT_RECEIVED
+  FINAL_PAYMENT_REQUESTED
+  ORDER_COMPLETED
+}
+
+model notifications {
+  id         String           @id
+  user_id    String
+  type       NotificationType
+  title      String
+  body       String
+  order_id   String?
+  is_read    Boolean          @default(false)
+  created_at DateTime         @default(now())
+  users      users            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  orders     orders?          @relation(fields: [order_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, is_read])
+  @@index([created_at])
+}
+
+model notification_preferences {
+  user_id        String
+  event_type     NotificationType
+  email_enabled  Boolean          @default(true)
+  in_app_enabled Boolean          @default(true)
+  users          users            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, event_type])
 }
