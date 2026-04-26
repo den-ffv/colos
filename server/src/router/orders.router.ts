@@ -9,7 +9,8 @@ import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
 import { emitOrderStatusChanged, emitOrderUpdated } from '../services/socket';
 import { generateOrderPdf, generateInvoicePdf } from '../services/pdf.service';
-import { sendDriverAssigned, sendInvoice, sendCompletionNotification } from '../services/email.service';
+import { sendDriverAssigned, sendInvoice, sendCompletionNotification, sendOrderStatusUpdate } from '../services/email.service';
+import * as NotificationService from '../services/notification.service';
 import type { Prisma, OrderStatus, ExecutionType } from '@prisma/client';
 
 export const ordersRouter = express.Router();
@@ -537,6 +538,14 @@ ordersRouter.post(
 
     emitOrderUpdated(companyId, { orderId: created.id, orderNumber: created.order_number, action: 'created' });
 
+    NotificationService.create({
+      userId,
+      type: 'ORDER_CREATED',
+      title: `Договір ${created.order_number} створено`,
+      body: `${created.pickup_address} → ${created.delivery_address}`,
+      orderId: created.id,
+    }).catch((err: unknown) => console.error('[NOTIFY] ORDER_CREATED failed:', err));
+
     return ok(res, orderDto(created), 201);
   }),
 );
@@ -682,7 +691,7 @@ ordersRouter.patch(
     if (newStatus === 'CONFIRMED' && updated.driver_id) {
       prisma.driver.findFirst({
         where: { id: updated.driver_id, company_id: companyId },
-        select: { first_name: true, last_name: true, user: { select: { email: true } } },
+        select: { first_name: true, last_name: true, user_id: true, user: { select: { email: true } } },
       }).then((driver) => {
         if (!driver?.user?.email) return;
         sendDriverAssigned({
@@ -696,7 +705,50 @@ ordersRouter.patch(
             hour: '2-digit', minute: '2-digit',
           }),
         }).catch((err: unknown) => console.error('[EMAIL] sendDriverAssigned failed:', err));
+        if (driver.user_id) {
+          NotificationService.create({
+            userId: driver.user_id,
+            type: 'DRIVER_ASSIGNED',
+            title: `Новий рейс: ${updated.order_number}`,
+            body: `${updated.pickup_address} → ${updated.delivery_address}`,
+            orderId: updated.id,
+          }).catch((err: unknown) => console.error('[NOTIFY] DRIVER_ASSIGNED failed:', err));
+        }
       }).catch((err: unknown) => console.error('[EMAIL] driver lookup failed:', err));
+    }
+
+    if (finalStatus === 'IN_TRANSIT') {
+      prisma.orders.findUnique({
+        where: { id: req.params.id },
+        select: { client: { select: { email: true, company_name: true } }, pickup_address: true, delivery_address: true },
+      }).then((o) => {
+        if (!o?.client?.email) return;
+        sendOrderStatusUpdate({
+          to: o.client.email,
+          clientName: o.client.company_name,
+          contractNumber: updated.order_number,
+          status: 'IN_TRANSIT',
+          pickupAddress: o.pickup_address,
+          deliveryAddress: o.delivery_address,
+        }).catch((err: unknown) => console.error('[EMAIL] IN_TRANSIT status update failed:', err));
+      }).catch((err: unknown) => console.error('[EMAIL] client lookup for IN_TRANSIT failed:', err));
+    }
+
+    if (newStatus === 'DELIVERED') {
+      prisma.orders.findUnique({
+        where: { id: req.params.id },
+        select: { client: { select: { email: true, company_name: true } }, pickup_address: true, delivery_address: true },
+      }).then((o) => {
+        if (!o?.client?.email) return;
+        sendOrderStatusUpdate({
+          to: o.client.email,
+          clientName: o.client.company_name,
+          contractNumber: updated.order_number,
+          status: 'DELIVERED',
+          pickupAddress: o.pickup_address,
+          deliveryAddress: o.delivery_address,
+        }).catch((err: unknown) => console.error('[EMAIL] DELIVERED status update failed:', err));
+      }).catch((err: unknown) => console.error('[EMAIL] client lookup for DELIVERED failed:', err));
     }
 
     return ok(res, orderDto(updated));
@@ -741,6 +793,20 @@ ordersRouter.post(
       newStatus: 'DRIVER_ACCEPTED',
       previousStatus: 'CONFIRMED',
     });
+
+    prisma.orders.findUnique({
+      where: { id: req.params.id },
+      select: { assigned_manager_id: true, order_number: true },
+    }).then((o) => {
+      if (!o) return;
+      NotificationService.create({
+        userId: o.assigned_manager_id,
+        type: 'DRIVER_ACCEPTED',
+        title: `Водій прийняв договір ${o.order_number}`,
+        body: 'Договір готовий до виконання',
+        orderId: req.params.id,
+      }).catch((err: unknown) => console.error('[NOTIFY] DRIVER_ACCEPTED failed:', err));
+    }).catch((err: unknown) => console.error('[NOTIFY] manager lookup for DRIVER_ACCEPTED failed:', err));
 
     return ok(res, orderDto(updated));
   }),
@@ -848,6 +914,36 @@ ordersRouter.post(
       previousStatus: 'AWAITING_PREPAYMENT',
     });
 
+    prisma.orders.findUnique({
+      where: { id: req.params.id },
+      select: {
+        assigned_manager_id: true,
+        order_number: true,
+        driver: { select: { user_id: true } },
+      },
+    }).then((o) => {
+      if (!o) return;
+      const tasks = [
+        NotificationService.create({
+          userId: o.assigned_manager_id,
+          type: 'PREPAYMENT_RECEIVED',
+          title: `Аванс отримано — ${o.order_number}`,
+          body: `Сума: ${amount.toLocaleString('uk-UA')} ₴`,
+          orderId: req.params.id,
+        }),
+      ];
+      if (o.driver?.user_id) {
+        tasks.push(NotificationService.create({
+          userId: o.driver.user_id,
+          type: 'PREPAYMENT_RECEIVED',
+          title: `Аванс отримано — ${o.order_number}`,
+          body: 'Ви можете виїжджати',
+          orderId: req.params.id,
+        }));
+      }
+      return Promise.all(tasks);
+    }).catch((err: unknown) => console.error('[NOTIFY] PREPAYMENT_RECEIVED failed:', err));
+
     return ok(res, orderDto(updated));
   }),
 );
@@ -898,6 +994,33 @@ ordersRouter.post(
       newStatus: 'COMPLETED',
       previousStatus: 'AWAITING_FINAL_PAYMENT',
     });
+
+    prisma.orders.findUnique({
+      where: { id: req.params.id },
+      select: { assigned_manager_id: true, order_number: true, company_id: true },
+    }).then(async (o) => {
+      if (!o) return;
+      const adminUsers = await prisma.users.findMany({
+        where: {
+          company_id: o.company_id,
+          user_roles: { some: { role: 'ADMIN' } },
+        },
+        select: { id: true },
+      });
+      const recipientIds = Array.from(new Set([
+        o.assigned_manager_id,
+        ...adminUsers.map((u) => u.id),
+      ]));
+      await Promise.all(recipientIds.map((uid) =>
+        NotificationService.create({
+          userId: uid,
+          type: 'ORDER_COMPLETED',
+          title: `Договір ${o.order_number} завершено`,
+          body: 'Фінальна оплата отримана',
+          orderId: req.params.id,
+        }),
+      ));
+    }).catch((err: unknown) => console.error('[NOTIFY] ORDER_COMPLETED failed:', err));
 
     // Update Invoice records + send completion email (fire-and-forget)
     const prepaidAmount = order.prepaid_amount ?? 0;
