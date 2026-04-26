@@ -301,3 +301,68 @@ export async function sendCompletionNotification(params: SendCompletionParams): 
     html,
   });
 }
+
+/* ─── sendOrderStatusUpdate ──────────────────────────────── */
+
+export interface SendStatusUpdateParams {
+  to: string
+  clientName: string
+  contractNumber: string
+  status: 'IN_TRANSIT' | 'DELIVERED'
+  pickupAddress: string
+  deliveryAddress: string
+}
+
+export async function sendOrderStatusUpdate(params: SendStatusUpdateParams): Promise<void> {
+  const { to, clientName, contractNumber, status, pickupAddress, deliveryAddress } = params;
+  const isDelivered = status === 'DELIVERED';
+  const statusLabel = isDelivered ? 'Доставлено' : 'В дорозі';
+  const statusColor = isDelivered ? '#16a34a' : '#2563eb';
+  const statusBg    = isDelivered ? '#f0fdf4'  : '#eff6ff';
+  const statusBorder = isDelivered ? '#bbf7d0' : '#bfdbfe';
+
+  const transport = getTransporter();
+  if (!transport) {
+    console.log(`[EMAIL DEV] sendOrderStatusUpdate → to: ${to}`);
+    console.log(`[EMAIL DEV] Contract: ${contractNumber}, Status: ${statusLabel}`);
+    return;
+  }
+
+  const html = `
+    <div style="${baseStyle}">
+      <div style="${cardStyle}">
+        ${header()}
+        <p style="margin:0 0 8px;">Доброго дня, <strong>${clientName}</strong>!</p>
+        <p style="color:#64748b;margin:0 0 24px;">
+          Статус вашого договору <strong>${contractNumber}</strong> оновлено.
+        </p>
+        <div style="background:${statusBg};border:1px solid ${statusBorder};border-radius:8px;
+                    padding:16px 24px;text-align:center;margin-bottom:24px;">
+          <p style="margin:0;font-size:18px;font-weight:700;color:${statusColor};">${statusLabel}</p>
+        </div>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+                    padding:16px 24px;margin-bottom:24px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="padding:6px 0;color:#64748b;font-size:13px;width:40%;">Завантаження:</td>
+              <td style="padding:6px 0;font-weight:600;font-size:13px;">${pickupAddress}</td>
+            </tr>
+            <tr style="border-top:1px solid #e2e8f0;">
+              <td style="padding:6px 0;color:#64748b;font-size:13px;">Розвантаження:</td>
+              <td style="padding:6px 0;font-weight:600;font-size:13px;">${deliveryAddress}</td>
+            </tr>
+          </table>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin:0;">
+          Дякуємо, що обрали COLOS CRM.
+        </p>
+      </div>
+    </div>`;
+
+  await transport.sendMail({
+    from: env.SMTP_FROM,
+    to,
+    subject: `Договір №${contractNumber} — ${statusLabel}`,
+    html,
+  });
+}
