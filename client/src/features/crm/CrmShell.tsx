@@ -88,8 +88,6 @@ function buildNav(roles: string[]): { main: NavItem[]; fleet: NavItem[] } {
     fleet.push({ view: 'vehicles', label: 'Транспорт', Icon: TruckIcon });
   }
 
-  main.push({ view: 'profile', label: 'Профіль', Icon: UserCircle02Icon });
-
   return { main, fleet };
 }
 
@@ -127,6 +125,7 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
   const [notifications, setNotifications] = useState<NotifItem[]>([]);
   const [notifOpen,     setNotifOpen]     = useState(false);
   const [toasts,        setToasts]        = useState<NotifItem[]>([]);
+  const [userMenuOpen,  setUserMenuOpen]  = useState(false);
 
   useEffect(() => {
     type NotifResp = { notifications: NotifItem[]; unreadCount: number }
@@ -230,10 +229,6 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
             <span className="crm__navIcon"><Settings01Icon size={17} strokeWidth={1.6} /></span>
             <span>Settings</span>
           </button>
-          <button type="button" className="crm__footerNavBtn" onClick={onLogout}>
-            <span className="crm__navIcon"><Logout03Icon size={17} strokeWidth={1.6} /></span>
-            <span>Sign out</span>
-          </button>
         </div>
       </aside>
 
@@ -290,11 +285,38 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
                 />
               )}
             </div>
-            <button type="button" className="crm__userChip" onClick={onLogout} title="Sign out">
-              <div className="crm__userAvatar">{avatarLetter}</div>
-              <span className="crm__userName">{displayName}</span>
-              <ArrowDown01Icon size={12} strokeWidth={2} style={{ color: 'var(--muted)', flexShrink: 0 }} />
-            </button>
+            <div className="crm__userWrap">
+              <button
+                type="button"
+                className="crm__userChip"
+                onClick={() => setUserMenuOpen((o) => !o)}
+              >
+                <div className="crm__userAvatar">{avatarLetter}</div>
+                <span className="crm__userName">{displayName}</span>
+                <ArrowDown01Icon size={12} strokeWidth={2} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+              </button>
+              {userMenuOpen && (
+                <div className="crm__userMenu" onMouseLeave={() => setUserMenuOpen(false)}>
+                  <button
+                    type="button"
+                    className="crm__userMenuItem"
+                    onClick={() => { setView('profile'); setUserMenuOpen(false); }}
+                  >
+                    <UserCircle02Icon size={15} strokeWidth={1.6} />
+                    <span>Профіль</span>
+                  </button>
+                  <div className="crm__userMenuDivider" />
+                  <button
+                    type="button"
+                    className="crm__userMenuItem crm__userMenuItem--danger"
+                    onClick={() => { setUserMenuOpen(false); onLogout(); }}
+                  >
+                    <Logout03Icon size={15} strokeWidth={1.6} />
+                    <span>Sign out</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

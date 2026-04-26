@@ -512,6 +512,45 @@
   white-space: nowrap;
 }
 
+.crm__userWrap { position: relative; }
+
+.crm__userMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1000;
+  min-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+  padding: 4px 0;
+}
+
+.crm__userMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  transition: background 0.1s;
+}
+.crm__userMenuItem:hover { background: var(--surface-3); }
+.crm__userMenuItem--danger { color: #ef4444; }
+.crm__userMenuItem--danger:hover { background: #fef2f2; }
+
+.crm__userMenuDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 .crm__userChip {
   display: flex;
   align-items: center;
