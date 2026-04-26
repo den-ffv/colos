@@ -30,6 +30,7 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
   io.on('connection', (socket) => {
     const companyId = socket.data.companyId as string;
     socket.join(`company:${companyId}`);
+    socket.join(`user:${socket.data.userId as string}`);
     console.log(`Socket connected: ${socket.id} (company: ${companyId})`);
 
     socket.on('disconnect', () => {
@@ -58,4 +59,19 @@ export function emitOrderUpdated(
   data: { orderId: string; orderNumber: string; action: 'created' | 'updated' | 'deleted' },
 ): void {
   io?.to(`company:${companyId}`).emit('order:updated', data);
+}
+
+export interface NotificationPayload {
+  id: string
+  type: string
+  title: string
+  body: string
+  orderId: string | null
+  isRead: boolean
+  createdAt: string
+}
+
+/** Emit a notification to a specific user's socket room */
+export function emitNotification(userId: string, payload: NotificationPayload): void {
+  io?.to(`user:${userId}`).emit('notification', payload)
 }
