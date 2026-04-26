@@ -216,3 +216,38 @@ authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
     return fail(res, 500, 'Internal server error', message);
   }
 });
+
+/* ─── PATCH /password – змінити пароль ──────────────── */
+authRouter.patch('/password', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const body = (req.body as Record<string, unknown> | null) ?? {};
+    const currentPassword = ensureString(body.currentPassword);
+    const newPassword = ensureString(body.newPassword);
+
+    if (!currentPassword || !newPassword) {
+      return fail(res, 400, 'currentPassword and newPassword are required');
+    }
+    if (newPassword.length < 8) {
+      return fail(res, 400, 'newPassword must be at least 8 characters');
+    }
+
+    const userId = (req as AuthenticatedRequest).auth.sub;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, password: true },
+    });
+    if (!user) return fail(res, 404, 'User not found');
+
+    const passwordOk = await bcrypt.compare(currentPassword, user.password);
+    if (!passwordOk) return fail(res, 400, 'Current password is incorrect');
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: userId }, data: { password: newHash } });
+
+    return ok(res, { success: true });
+  } catch (err) {
+    const message =
+      typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : 'Unknown error';
+    return fail(res, 500, 'Internal server error', message);
+  }
+});
