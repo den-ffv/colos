@@ -32,8 +32,9 @@ import { UsersPage } from '../users/UsersPage';
 import { NotificationDropdown } from './NotificationDropdown';
 import { NotificationToast } from './NotificationToast';
 import { ProfilePage } from '../profile/ProfilePage';
+import { CompanyPage } from '../company/CompanyPage';
 
-type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers' | 'my-orders' | 'order-new' | 'order-edit' | 'users' | 'profile';
+type CrmView = 'dashboard' | 'orders' | 'clients' | 'drivers' | 'vehicles' | 'carriers' | 'my-orders' | 'order-new' | 'order-edit' | 'users' | 'profile' | 'company';
 
 type NotifItem = {
   id: string
@@ -87,6 +88,8 @@ function buildNav(roles: string[]): { main: NavItem[]; fleet: NavItem[] } {
     fleet.push({ view: 'drivers', label: 'Водії', Icon: UserAccountIcon });
     fleet.push({ view: 'vehicles', label: 'Транспорт', Icon: TruckIcon });
   }
+
+  main.push({ view: 'company', label: 'Компанія', Icon: Settings01Icon });
 
   return { main, fleet };
 }
@@ -339,6 +342,7 @@ export function CrmShell({ tokens, onLogout }: { tokens: AuthTokens; onLogout: (
                                     onSaved={() => { setEditOrderData(null); setView('orders'); }}
                                     onCancel={() => { setEditOrderData(null); setView('orders'); }} /> :
            view === 'profile'    ? <ProfilePage tokens={tokens} /> :
+           view === 'company'    ? <CompanyPage tokens={tokens} onUnauthorized={onLogout} /> :
            null}
         </div>
       </main>
