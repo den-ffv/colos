@@ -494,18 +494,23 @@ describe('PATCH /api/auth/password', () => {
 });
 
 describe('updateCompanySchema', () => {
-  it('accepts a partial valid payload', () => {
+  it('приймає частковий валідний payload', () => {
     const result = updateCompanySchema.safeParse({ name: 'ТОВ Нова', email: null });
     expect(result.success).toBe(true);
   });
 
-  it('rejects a name shorter than 2 characters', () => {
+  it('відхиляє name коротше 2 символів', () => {
     const result = updateCompanySchema.safeParse({ name: 'X' });
     expect(result.success).toBe(false);
   });
 
-  it('rejects an invalid operationMode', () => {
+  it('відхиляє невалідний operationMode', () => {
     const result = updateCompanySchema.safeParse({ operationMode: 'UNKNOWN' });
+    expect(result.success).toBe(false);
+  });
+
+  it('відхиляє порожній payload', () => {
+    const result = updateCompanySchema.safeParse({});
     expect(result.success).toBe(false);
   });
 });

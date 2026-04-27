@@ -7,6 +7,7 @@ const driverPayTypeEnum = z.enum(['PER_KM', 'PER_HOUR', 'PER_DAY', 'FIXED']);
 const fuelTypeEnum = z.enum(['DIESEL', 'PETROL_95', 'PETROL_92', 'GAS']);
 const orderStatusEnum = z.enum(['NEW', 'CONFIRMED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED']);
 const executionTypeEnum = z.enum(['INTERNAL', 'EXTERNAL']);
+const operationModeEnum = z.enum(['OWN_FLEET', 'BROKER', 'HYBRID']);
 
 /** E.g. +380 67 123-45-67, (067) 123-45-67, +1-800-555-0100 */
 const phoneSchema = z
@@ -71,7 +72,7 @@ export const updateCompanySchema = z.object({
   phone: phoneSchema.nullable().optional(),
   address: z.string().trim().max(500, 'Максимум 500 символів').nullable().optional(),
   hasOwnFleet: z.boolean().optional(),
-  operationMode: z.enum(['OWN_FLEET', 'BROKER', 'HYBRID']).optional(),
+  operationMode: operationModeEnum.optional(),
   usesBrokerServices: z.boolean().optional(),
 }).refine(
   (data) => Object.values(data).some((v) => v !== undefined),
