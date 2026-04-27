@@ -16,7 +16,7 @@ vi.mock('../utils/prisma', () => {
   const driverModel = { findMany: vi.fn(), count: vi.fn() };
   const clientModel = { findMany: vi.fn(), count: vi.fn(), create: vi.fn(), findUnique: vi.fn() };
   const carrierModel = { findMany: vi.fn(), count: vi.fn() };
-  const companyModel = { findFirst: vi.fn() };
+  const companyModel = { findFirst: vi.fn(), update: vi.fn() };
 
   return {
     prisma: {
@@ -512,5 +512,114 @@ describe('updateCompanySchema', () => {
   it('відхиляє порожній payload', () => {
     const result = updateCompanySchema.safeParse({});
     expect(result.success).toBe(false);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   Companies
+═══════════════════════════════════════════════════════════ */
+
+const mockCompany = {
+  id: 'company-uuid-001',
+  name: 'ТОВ Тест Логістика',
+  email: 'info@test.ua',
+  phone: '+380671234567',
+  address: 'вул. Хрещатик, 1, Київ',
+  has_own_fleet: true,
+  operation_mode: 'HYBRID',
+  uses_broker_services: true,
+  created_at: new Date('2024-01-01T00:00:00.000Z'),
+  updated_at: new Date('2024-06-01T00:00:00.000Z'),
+};
+
+describe('GET /api/companies/me', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('повертає 200 з даними компанії для авторизованого користувача', async () => {
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['ADMIN'],
+    });
+    (prisma.companies.findFirst as MockedFn).mockResolvedValue(mockCompany);
+
+    const res = await request(app)
+      .get('/api/companies/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.name).toBe('ТОВ Тест Логістика');
+    expect(res.body.data.hasOwnFleet).toBe(true);
+    expect(res.body.data.operationMode).toBe('HYBRID');
+  });
+
+  it('повертає 401 без токена', async () => {
+    const res = await request(app).get('/api/companies/me');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('PUT /api/companies/me', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('повертає 200 при оновленні ADMIN-ом', async () => {
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['ADMIN'],
+    });
+    const updatedCompany = { ...mockCompany, name: 'Нова Назва', updated_at: new Date() };
+    (prisma.companies.update as MockedFn).mockResolvedValue(updatedCompany);
+
+    const res = await request(app)
+      .put('/api/companies/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Нова Назва' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.name).toBe('Нова Назва');
+  });
+
+  it('повертає 403 для не-ADMIN', async () => {
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['MANAGER'],
+    });
+
+    const res = await request(app)
+      .put('/api/companies/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Нова Назва' });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('повертає 400 при невалідних даних (name занадто коротке)', async () => {
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['ADMIN'],
+    });
+
+    const res = await request(app)
+      .put('/api/companies/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'X' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('повертає 401 без токена', async () => {
+    const res = await request(app)
+      .put('/api/companies/me')
+      .send({ name: 'Тест' });
+    expect(res.status).toBe(401);
   });
 });
