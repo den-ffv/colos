@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import './company.css'
 import type { AuthTokens } from '../auth/auth.storage'
 import { apiGetJson, apiPutJson, type ApiError } from '../../lib/api'
 import { isApiSuccess, type ApiResponse } from '../../lib/apiResponse'
@@ -74,8 +75,10 @@ export function CompanyPage({
       .finally(() => setIsLoading(false))
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadCompany() }, [])
+  useEffect(() => {
+    void loadCompany()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function openEdit() {
     if (!company) return
@@ -98,7 +101,7 @@ export function CompanyPage({
     apiPutJson<ApiResponse<Company>>(
       '/api/companies/me',
       {
-        name: form.name || undefined,
+        name: form.name.trim() || undefined,
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
         address: form.address.trim() || null,
@@ -117,7 +120,8 @@ export function CompanyPage({
         }
       })
       .catch((err: ApiError) => {
-        setSaveError(err.message ?? 'Помилка збереження')
+        if (err.status === 401) onUnauthorized()
+        else setSaveError(err.message ?? 'Помилка збереження')
       })
       .finally(() => setSaving(false))
   }
@@ -177,14 +181,14 @@ export function CompanyPage({
         title="Редагувати компанію"
         onClose={() => setEditOpen(false)}
         footer={
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <>
             <Button variant="secondary" onClick={() => setEditOpen(false)} disabled={saving}>
               Скасувати
             </Button>
             <Button variant="primary" onClick={handleSave} disabled={saving}>
               {saving ? 'Збереження...' : 'Зберегти'}
             </Button>
-          </div>
+          </>
         }
       >
         <div className="company__form">
@@ -230,9 +234,11 @@ export function CompanyPage({
                 setForm((f) => ({ ...f, operationMode: e.target.value as OperationMode }))
               }
             >
-              <option value="OWN_FLEET">Власний флот</option>
-              <option value="BROKER">Брокер</option>
-              <option value="HYBRID">Гібрид</option>
+              {(Object.entries(OPERATION_MODE_LABELS) as [OperationMode, string][]).map(
+                ([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                )
+              )}
             </select>
           </label>
           <label className="company__checkLabel">
