@@ -11,8 +11,8 @@ export const companiesRouter = express.Router();
 
 companiesRouter.use(requireAuth);
 
-function getAuth(req: Request) {
-  return (req as AuthenticatedRequest).auth;
+function getCompanyId(req: Request) {
+  return (req as AuthenticatedRequest).auth.company_id;
 }
 
 function companyDto(c: {
@@ -30,9 +30,9 @@ function companyDto(c: {
   return {
     id: c.id,
     name: c.name,
-    email: c.email,
-    phone: c.phone,
-    address: c.address,
+    email: c.email ?? undefined,
+    phone: c.phone ?? undefined,
+    address: c.address ?? undefined,
     hasOwnFleet: c.has_own_fleet,
     operationMode: c.operation_mode,
     usesBrokerServices: c.uses_broker_services,
@@ -57,7 +57,7 @@ const companySelect = {
 companiesRouter.get(
   '/me',
   asyncHandler(async (req: Request, res: Response) => {
-    const { company_id } = getAuth(req);
+    const company_id = getCompanyId(req);
     const company = await prisma.companies.findFirst({
       where: { id: company_id },
       select: companySelect,
@@ -72,8 +72,14 @@ companiesRouter.put(
   authorize(['ADMIN']),
   validate(updateCompanySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { company_id } = getAuth(req);
+    const company_id = getCompanyId(req);
     const body = (req.body as Record<string, unknown>) ?? {};
+
+    const existing = await prisma.companies.findFirst({
+      where: { id: company_id },
+      select: { id: true },
+    });
+    if (!existing) return fail(res, 404, 'Company not found');
 
     const updated = await prisma.companies.update({
       where: { id: company_id },

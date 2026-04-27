@@ -559,6 +559,22 @@ describe('GET /api/companies/me', () => {
     const res = await request(app).get('/api/companies/me');
     expect(res.status).toBe(401);
   });
+
+  it('повертає 404 коли компанія не знайдена', async () => {
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: 'nonexistent-uuid',
+      roles: ['ADMIN'],
+    });
+    (prisma.companies.findFirst as MockedFn).mockResolvedValue(null);
+
+    const res = await request(app)
+      .get('/api/companies/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(404);
+  });
 });
 
 describe('PUT /api/companies/me', () => {
@@ -572,6 +588,7 @@ describe('PUT /api/companies/me', () => {
       roles: ['ADMIN'],
     });
     const updatedCompany = { ...mockCompany, name: 'Нова Назва', updated_at: new Date() };
+    (prisma.companies.findFirst as MockedFn).mockResolvedValue({ id: mockUser.company_id });
     (prisma.companies.update as MockedFn).mockResolvedValue(updatedCompany);
 
     const res = await request(app)
@@ -614,6 +631,28 @@ describe('PUT /api/companies/me', () => {
       .send({ name: 'X' });
 
     expect(res.status).toBe(400);
+  });
+
+  it('очищає nullable поля (email, phone, address) коли значення null', async () => {
+    const token = signAccessToken({
+      sub: mockUser.id,
+      email: mockUser.email,
+      company_id: mockUser.company_id,
+      roles: ['ADMIN'],
+    });
+    const updatedCompany = { ...mockCompany, email: null, phone: null, address: null, updated_at: new Date() };
+    (prisma.companies.findFirst as MockedFn).mockResolvedValue({ id: mockUser.company_id });
+    (prisma.companies.update as MockedFn).mockResolvedValue(updatedCompany);
+
+    const res = await request(app)
+      .put('/api/companies/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: null, phone: null, address: null });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.email).toBeUndefined();
+    expect(res.body.data.phone).toBeUndefined();
+    expect(res.body.data.address).toBeUndefined();
   });
 
   it('повертає 401 без токена', async () => {
