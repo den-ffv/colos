@@ -68,6 +68,7 @@ import { app } from '../app';
 import { prisma } from '../utils/prisma';
 import { signAccessToken } from '../utils/jwt';
 import bcrypt from 'bcryptjs';
+import { updateCompanySchema } from '../schemas';
 
 /* ── Типи для зручності ──────────────────────────────────── */
 
@@ -489,5 +490,22 @@ describe('PATCH /api/auth/password', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.success).toBe(true);
+  });
+});
+
+describe('updateCompanySchema', () => {
+  it('accepts a partial valid payload', () => {
+    const result = updateCompanySchema.safeParse({ name: 'ТОВ Нова', email: null });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a name shorter than 2 characters', () => {
+    const result = updateCompanySchema.safeParse({ name: 'X' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an invalid operationMode', () => {
+    const result = updateCompanySchema.safeParse({ operationMode: 'UNKNOWN' });
+    expect(result.success).toBe(false);
   });
 });

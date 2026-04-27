@@ -63,6 +63,18 @@ export const createClientSchema = z.object({
 
 export const updateClientSchema = createClientSchema.partial();
 
+/* ─── companies ────────────────────────────────────────── */
+
+export const updateCompanySchema = z.object({
+  name: z.string().trim().min(2, 'Мінімум 2 символи').max(200, 'Максимум 200 символів').optional(),
+  email: z.string().trim().email('Невірний email').nullable().optional(),
+  phone: phoneSchema.nullable().optional(),
+  address: z.string().trim().max(500, 'Максимум 500 символів').nullable().optional(),
+  hasOwnFleet: z.boolean().optional(),
+  operationMode: z.enum(['OWN_FLEET', 'BROKER', 'HYBRID']).optional(),
+  usesBrokerServices: z.boolean().optional(),
+});
+
 /* ─── drivers ──────────────────────────────────────────── */
 
 export const createDriverSchema = z
