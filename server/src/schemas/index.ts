@@ -73,7 +73,10 @@ export const updateCompanySchema = z.object({
   hasOwnFleet: z.boolean().optional(),
   operationMode: z.enum(['OWN_FLEET', 'BROKER', 'HYBRID']).optional(),
   usesBrokerServices: z.boolean().optional(),
-});
+}).refine(
+  (data) => Object.values(data).some((v) => v !== undefined),
+  { message: 'Потрібно вказати хоча б одне поле' }
+);
 
 /* ─── drivers ──────────────────────────────────────────── */
 
