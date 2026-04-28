@@ -45,12 +45,17 @@ export function getIo(): SocketServer | null {
   return io;
 }
 
+
 /** Emit order status change to all sockets in the company room */
 export function emitOrderStatusChanged(
   companyId: string,
   data: { orderId: string; orderNumber: string; newStatus: string; previousStatus: string },
 ): void {
   io?.to(`company:${companyId}`).emit('order:statusChanged', data);
+}
+
+export function emitNotification(userId: string, payload: NotificationPayload): void {
+  io?.to(`user:${userId}`).emit('notification', payload)
 }
 
 /** Emit full order update (create/edit) */
@@ -72,6 +77,3 @@ export interface NotificationPayload {
 }
 
 /** Emit a notification to a specific user's socket room */
-export function emitNotification(userId: string, payload: NotificationPayload): void {
-  io?.to(`user:${userId}`).emit('notification', payload)
-}
