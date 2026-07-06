@@ -392,7 +392,7 @@
   margin-top: 2px;
 }
 
-/* ── Resource busy warning ────────────────────────────── */
+/* ── Resource busy warning / ok ───────────────────────── */
 
 .co__select--warn {
   border-color: #f59e0b;
@@ -403,6 +403,36 @@
   font-size: 11px;
   color: #b45309;
   margin-top: 2px;
+}
+
+.co__resOk {
+  font-size: 11px;
+  color: #15803d;
+  margin-top: 2px;
+}
+
+/* ── Margin band label ────────────────────────────────── */
+
+.co__marginBand {
+  font-size: 11px;
+  font-weight: 600;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  color: var(--text-2);
+}
+
+.co__marginCard--warn {
+  background: rgba(234, 179, 8, 0.06);
+  border-color: rgba(234, 179, 8, 0.35);
+}
+
+/* ── Readonly input styling ───────────────────────────── */
+
+.co__input[readonly] {
+  background: var(--surface-2, #f4f4f5);
+  color: var(--muted);
+  cursor: default;
 }
 
 /* ── Client search / dropdown ─────────────────────────── */

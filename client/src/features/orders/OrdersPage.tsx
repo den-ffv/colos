@@ -81,7 +81,9 @@ type OrderDetail = {
   clientPaid: boolean
   prepaidAmount?: number
   prepaidAt?: string
+  prepaymentReceipt?: string
   finalPaidAmount?: number
+  finalPaymentReceipt?: string
   finalPaidAt?: string
   totalPaid: number
   assignedManagerId: string
@@ -136,7 +138,7 @@ const STATUS_BADGE: Record<OrderStatus, 'accent' | 'neutral' | 'warning' | 'succ
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   NEW:                    ['CONFIRMED', 'CANCELLED'],
   CONFIRMED:              ['CANCELLED'],
-  DRIVER_ACCEPTED:        ['AWAITING_PREPAYMENT', 'CANCELLED'],
+  DRIVER_ACCEPTED:        ['CANCELLED'],
   AWAITING_PREPAYMENT:    ['CANCELLED'],
   PREPAID:                ['CANCELLED'],
   IN_TRANSIT:             ['CANCELLED'],
@@ -343,12 +345,18 @@ export function OrdersPage({
   /* ─── lookups ────────────────── */
   const [lookups, setLookups] = useState<Lookups | null>(null)
 
+  // Cancel confirmation modal
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+
   // Payment modals
   const [paymentModal, setPaymentModal] = useState<'prepaid' | 'final' | null>(null)
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentSubmitting, setPaymentSubmitting] = useState(false)
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [paymentTargetId, setPaymentTargetId] = useState<string | null>(null)
+  const [receiptBase64, setReceiptBase64] = useState<string | null>(null)
+  const [receiptName, setReceiptName]   = useState<string | null>(null)
 
   /* ─── query string ───────────── */
   const query = useMemo(() => {
@@ -427,7 +435,34 @@ export function OrdersPage({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokens.accessToken])
 
-  /* ─── PDF download ───────────── */
+  /* ─── PDF send / download ───────────── */
+
+  const [sendPdfState, setSendPdfState] = useState<'idle' | 'sending' | 'ok' | 'err'>('idle')
+  const [sendPdfError, setSendPdfError] = useState<string | null>(null)
+
+  async function sendPdf(orderId: string) {
+    setSendPdfState('sending')
+    setSendPdfError(null)
+    try {
+      const res = await apiPostJson<ApiResponse<{ sent: boolean; to: string }>>(
+        `/api/orders/${orderId}/send-pdf`,
+        {},
+        { headers: authHeaders },
+      )
+      if (isSuccess(res)) {
+        setSendPdfState('ok')
+        setTimeout(() => setSendPdfState('idle'), 3000)
+      } else {
+        setSendPdfError((res as { message: string }).message)
+        setSendPdfState('err')
+        setTimeout(() => setSendPdfState('idle'), 4000)
+      }
+    } catch {
+      setSendPdfError('Помилка відправки')
+      setSendPdfState('err')
+      setTimeout(() => setSendPdfState('idle'), 4000)
+    }
+  }
 
   async function downloadPdf(orderId: string, orderNumber: string) {
     try {
@@ -516,7 +551,63 @@ export function OrdersPage({
     }
   }
 
+  async function confirmCancel() {
+    setCancelSubmitting(true)
+    await changeStatus('CANCELLED')
+    setCancelSubmitting(false)
+    setCancelConfirmOpen(false)
+  }
+
   /* ─── payment actions ────────── */
+
+  const [resendPrepayState, setResendPrepayState]   = useState<'idle' | 'sending' | 'ok' | 'err'>('idle')
+  const [resendFinalState,   setResendFinalState]   = useState<'idle' | 'sending' | 'ok' | 'err'>('idle')
+
+  async function resendPrepayment(orderId: string) {
+    setResendPrepayState('sending')
+    try {
+      const res = await apiPostJson<ApiResponse<{ sent: boolean; to: string }>>(
+        `/api/orders/${orderId}/resend-prepayment`,
+        {},
+        { headers: authHeaders },
+      )
+      if (isSuccess(res)) {
+        setResendPrepayState('ok')
+        setTimeout(() => setResendPrepayState('idle'), 3000)
+      } else {
+        setResendPrepayState('err')
+        setDetailsError((res as { message: string }).message)
+        setTimeout(() => setResendPrepayState('idle'), 4000)
+      }
+    } catch (err) {
+      setResendPrepayState('err')
+      setDetailsError((err as Partial<ApiError>).message ?? 'Помилка відправки')
+      setTimeout(() => setResendPrepayState('idle'), 4000)
+    }
+  }
+
+  async function resendFinalInvoice(orderId: string) {
+    setResendFinalState('sending')
+    try {
+      const res = await apiPostJson<ApiResponse<{ sent: boolean; to: string }>>(
+        `/api/orders/${orderId}/resend-final-invoice`,
+        {},
+        { headers: authHeaders },
+      )
+      if (isSuccess(res)) {
+        setResendFinalState('ok')
+        setTimeout(() => setResendFinalState('idle'), 3000)
+      } else {
+        setResendFinalState('err')
+        setDetailsError((res as { message: string }).message)
+        setTimeout(() => setResendFinalState('idle'), 4000)
+      }
+    } catch (err) {
+      setResendFinalState('err')
+      setDetailsError((err as Partial<ApiError>).message ?? 'Помилка відправки')
+      setTimeout(() => setResendFinalState('idle'), 4000)
+    }
+  }
 
   async function requestPrepayment(orderId: string) {
     try {
@@ -538,6 +629,8 @@ export function OrdersPage({
     setPaymentModal('prepaid')
     setPaymentAmount('')
     setPaymentError(null)
+    setReceiptBase64(null)
+    setReceiptName(null)
   }
 
   function openMarkFinalPaid(order: OrderDetail) {
@@ -545,11 +638,11 @@ export function OrdersPage({
     setPaymentModal('final')
     setPaymentAmount('')
     setPaymentError(null)
+    setReceiptBase64(null)
+    setReceiptName(null)
   }
 
   async function submitPayment() {
-    const amount = parseFloat(paymentAmount)
-    if (!amount || amount <= 0) { setPaymentError('Введіть суму більше 0'); return }
     if (!paymentTargetId || !paymentModal) return
     setPaymentSubmitting(true)
     setPaymentError(null)
@@ -557,7 +650,9 @@ export function OrdersPage({
       const endpoint = paymentModal === 'prepaid'
         ? `/api/orders/${paymentTargetId}/mark-prepaid`
         : `/api/orders/${paymentTargetId}/mark-final-paid`
-      const res = await apiPostJson<ApiResponse<OrderDetail>>(endpoint, { amount }, { headers: authHeaders })
+      const payload: Record<string, unknown> = {}
+      if (receiptBase64) payload.receipt = receiptBase64
+      const res = await apiPostJson<ApiResponse<OrderDetail>>(endpoint, payload, { headers: authHeaders })
       if (isSuccess(res)) {
         setDetails(res.data)
         void loadList()
@@ -879,6 +974,19 @@ export function OrdersPage({
                   PDF
                 </Button>
               )}
+              {details && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void sendPdf(details.id)}
+                  disabled={sendPdfState === 'sending'}
+                >
+                  {sendPdfState === 'sending' ? 'Надсилання…' : sendPdfState === 'ok' ? '✓ Надіслано' : '✉ Надіслати PDF клієнту'}
+                </Button>
+              )}
+              {sendPdfState === 'err' && sendPdfError && (
+                <span style={{ fontSize: 12, color: 'var(--danger, #dc2626)' }}>{sendPdfError}</span>
+              )}
               <Button size="sm" variant="ghost" onClick={() => void deleteOrder()} disabled={!canDelete || detailsLoading}>
                 Видалити
               </Button>
@@ -896,7 +1004,12 @@ export function OrdersPage({
               <span style={{ marginRight: 8 }}>Статус: {renderStatusBadge(details.status)}</span>
               {/* Звичайні переходи статусів */}
               {STATUS_TRANSITIONS[details.status].map((next) => (
-                <Button key={next} size="sm" variant={next === 'CANCELLED' ? 'ghost' : 'primary'} onClick={() => void changeStatus(next)}>
+                <Button
+                  key={next}
+                  size="sm"
+                  variant={next === 'CANCELLED' ? 'ghost' : 'primary'}
+                  onClick={() => next === 'CANCELLED' ? setCancelConfirmOpen(true) : void changeStatus(next)}
+                >
                   → {STATUS_LABELS[next]}
                 </Button>
               ))}
@@ -907,14 +1020,44 @@ export function OrdersPage({
                 </Button>
               )}
               {canManagePayments && details.status === 'AWAITING_PREPAYMENT' && (
-                <Button size="sm" variant="primary" onClick={() => void openMarkPrepaid(details)}>
-                  Зафіксувати аванс
-                </Button>
+                <>
+                  <Button size="sm" variant="primary" onClick={() => void openMarkPrepaid(details)}>
+                    Зафіксувати аванс
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void resendPrepayment(details.id)}
+                    disabled={resendPrepayState === 'sending'}
+                    title="Повторно надіслати рахунок на аванс клієнту"
+                  >
+                    {resendPrepayState === 'sending'
+                      ? 'Надсилання…'
+                      : resendPrepayState === 'ok'
+                        ? '✓ Надіслано'
+                        : '✉ Нагадати про аванс'}
+                  </Button>
+                </>
               )}
               {canManagePayments && details.status === 'AWAITING_FINAL_PAYMENT' && (
-                <Button size="sm" variant="primary" onClick={() => void openMarkFinalPaid(details)}>
-                  Зафіксувати оплату
-                </Button>
+                <>
+                  <Button size="sm" variant="primary" onClick={() => void openMarkFinalPaid(details)}>
+                    Зафіксувати оплату
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void resendFinalInvoice(details.id)}
+                    disabled={resendFinalState === 'sending'}
+                    title="Повторно надіслати рахунок на фінальну оплату клієнту"
+                  >
+                    {resendFinalState === 'sending'
+                      ? 'Надсилання…'
+                      : resendFinalState === 'ok'
+                        ? '✓ Надіслано'
+                        : '✉ Нагадати про оплату'}
+                  </Button>
+                </>
               )}
             </div>
 
@@ -995,8 +1138,30 @@ export function OrdersPage({
                 {details.prepaidAmount != null && (
                   <KV k="Аванс" v={`${money(details.prepaidAmount)} ₴${details.prepaidAt ? ` · ${formatDate(details.prepaidAt)}` : ''}`} />
                 )}
+                {details.prepaymentReceipt && (
+                  <KV k="Квитанція" v={
+                    <a
+                      href={details.prepaymentReceipt}
+                      download="квитанція"
+                      style={{ color: 'var(--accent)', fontSize: 13, textDecoration: 'underline' }}
+                    >
+                      📎 Завантажити квитанцію
+                    </a>
+                  } />
+                )}
                 {details.finalPaidAmount != null && (
                   <KV k="Фінальна оплата" v={`${money(details.finalPaidAmount)} ₴${details.finalPaidAt ? ` · ${formatDate(details.finalPaidAt)}` : ''}`} />
+                )}
+                {details.finalPaymentReceipt && (
+                  <KV k="Квитанція (фінал)" v={
+                    <a
+                      href={details.finalPaymentReceipt}
+                      download="квитанція-фінал"
+                      style={{ color: 'var(--accent)', fontSize: 13, textDecoration: 'underline' }}
+                    >
+                      📎 Завантажити квитанцію
+                    </a>
+                  } />
                 )}
                 <KV k="Всього сплачено" v={`${money(details.totalPaid)} ₴`} />
                 <KV
@@ -1227,36 +1392,91 @@ export function OrdersPage({
         </div>
       </Drawer>
 
+      {/* ── cancel confirmation modal ── */}
+      {cancelConfirmOpen && (
+        <div className="ui-modal__overlay" onMouseDown={() => !cancelSubmitting && setCancelConfirmOpen(false)}>
+          <div className="ui-modal ui-card" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="ui-modal__head">
+              <span className="ui-modal__title">Скасування договору</span>
+              <button className="ui-modal__close" onClick={() => setCancelConfirmOpen(false)} disabled={cancelSubmitting}>✕</button>
+            </div>
+            <div className="ui-modal__body" style={{ padding: '20px 24px' }}>
+              <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: 15 }}>
+                Ви впевнені, що хочете скасувати цей договір?
+              </p>
+              {details && (
+                <p style={{ margin: '0 0 4px', fontSize: 13, color: 'var(--muted)' }}>
+                  {details.orderNumber} · {details.pickupAddress} → {details.deliveryAddress}
+                </p>
+              )}
+              <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--danger, #dc2626)' }}>
+                Цю дію неможливо скасувати.
+              </p>
+            </div>
+            <div className="ui-modal__foot" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <Button variant="ghost" size="sm" onClick={() => setCancelConfirmOpen(false)} disabled={cancelSubmitting}>
+                Назад
+              </Button>
+              <Button variant="danger" size="sm" onClick={() => void confirmCancel()} disabled={cancelSubmitting}>
+                {cancelSubmitting ? 'Скасування…' : 'Скасувати договір'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── payment amount modal ── */}
       {paymentModal && (
-        <div className="ui-modal__overlay" onMouseDown={() => setPaymentModal(null)}>
-          <div className="ui-modal ui-card" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+        <div className="ui-modal__overlay" onMouseDown={() => !paymentSubmitting && setPaymentModal(null)}>
+          <div className="ui-modal ui-card" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
             <div className="ui-modal__head">
               <div className="ui-modal__title">
                 {paymentModal === 'prepaid' ? 'Зафіксувати аванс' : 'Зафіксувати фінальну оплату'}
               </div>
+              <button className="ui-modal__close" onClick={() => setPaymentModal(null)} disabled={paymentSubmitting}>✕</button>
             </div>
-            <div className="ui-modal__body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="ui-modal__body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {paymentError && <div className="orders__error">{paymentError}</div>}
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-2)', letterSpacing: '0.3px' }}>
-                  Сума (₴) *
+                  Квитанція про оплату
                 </span>
-                <input
-                  className="ui-input"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  autoFocus
-                />
-              </label>
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                  border: '1px dashed var(--border)', borderRadius: 6,
+                  padding: '10px 14px', background: 'var(--surface-2)',
+                }}>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      setReceiptName(file.name)
+                      const reader = new FileReader()
+                      reader.onload = () => setReceiptBase64(reader.result as string)
+                      reader.readAsDataURL(file)
+                    }}
+                  />
+                  <span style={{ fontSize: 20 }}>📎</span>
+                  <span style={{ fontSize: 13, color: receiptName ? 'var(--text)' : 'var(--muted)' }}>
+                    {receiptName ?? 'Прикріпити файл (зображення або PDF)'}
+                  </span>
+                  {receiptName && (
+                    <button
+                      type="button"
+                      style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 13 }}
+                      onClick={(e) => { e.preventDefault(); setReceiptBase64(null); setReceiptName(null) }}
+                    >✕</button>
+                  )}
+                </label>
+              </div>
             </div>
             <div className="ui-modal__footer" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <Button variant="secondary" size="sm" onClick={() => setPaymentModal(null)}>Скасувати</Button>
+              <Button variant="secondary" size="sm" onClick={() => setPaymentModal(null)} disabled={paymentSubmitting}>Скасувати</Button>
               <Button variant="primary" size="sm" disabled={paymentSubmitting} onClick={() => void submitPayment()}>
-                {paymentSubmitting ? '…' : 'Зберегти'}
+                {paymentSubmitting ? 'Збереження…' : 'Зберегти'}
               </Button>
             </div>
           </div>

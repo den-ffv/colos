@@ -10,6 +10,7 @@ import { marketDataRouter } from './market-data.router';
 import { usersRouter } from './users.router';
 import { notificationsRouter } from './notifications.router';
 import { companiesRouter } from './companies.router';
+import { companyAccountsRouter } from './company-accounts.router';
 
 export const apiRouter = express.Router();
 
@@ -28,3 +29,4 @@ apiRouter.use('/market-data', marketDataRouter);
 apiRouter.use('/users', usersRouter);
 apiRouter.use('/notifications', notificationsRouter);
 apiRouter.use('/companies', companiesRouter);
+apiRouter.use('/company-accounts', companyAccountsRouter);

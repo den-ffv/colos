@@ -54,11 +54,22 @@ model companies {
   uses_broker_services Boolean       @default(true)
   carriers             carriers[]
   clients              clients[]
+  company_accounts     company_accounts[]
   drivers              drivers[]
   invoices             invoices[]
   orders               orders[]
   users                users[]
   vehicles             vehicles[]
+}
+
+model company_accounts {
+  id         String    @id
+  company_id String
+  name       String
+  account    String
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now())
+  companies  companies @relation(fields: [company_id], references: [id], onDelete: Cascade)
 }
 
 model drivers {
@@ -153,10 +164,12 @@ model orders {
   total_cost            Float
   updated_at            DateTime
   vehicle_id            String?
-  final_paid_amount     Float?
-  final_paid_at         DateTime?
+  final_paid_amount       Float?
+  final_paid_at           DateTime?
+  final_payment_receipt   String?
   prepaid_amount        Float?
   prepaid_at            DateTime?
+  prepayment_receipt    String?
   total_paid            Float         @default(0)
   invoices              invoices[]
   notifications         notifications[]

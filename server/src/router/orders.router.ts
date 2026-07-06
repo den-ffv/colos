@@ -9,7 +9,7 @@ import { fail, ok, okList } from '../utils/http';
 import { parseLimit, parsePage, parseSortOrder } from '../utils/pagination';
 import { emitOrderStatusChanged, emitOrderUpdated } from '../services/socket';
 import { generateOrderPdf, generateInvoicePdf } from '../services/pdf.service';
-import { sendDriverAssigned, sendInvoice, sendCompletionNotification, sendOrderStatusUpdate } from '../services/email.service';
+import { sendDriverAssigned, sendInvoice, sendCompletionNotification, sendOrderStatusUpdate, sendOrderWaybill } from '../services/email.service';
 import * as NotificationService from '../services/notification.service';
 import type { Prisma, OrderStatus, ExecutionType } from '@prisma/client';
 
@@ -155,8 +155,10 @@ const orderSelect = {
   client_paid: true,
   prepaid_amount: true,
   prepaid_at: true,
+  prepayment_receipt: true,
   final_paid_amount: true,
   final_paid_at: true,
+  final_payment_receipt: true,
   total_paid: true,
   assigned_manager_id: true,
   users: { select: { id: true, first_name: true, last_name: true, email: true } },
@@ -166,7 +168,7 @@ const orderSelect = {
   updated_at: true,
 } as const;
 
-type OrderRow = Prisma.OrderGetPayload<{ select: typeof orderSelect }>;
+type OrderRow = Prisma.ordersGetPayload<{ select: typeof orderSelect }>;
 
 function orderDto(o: OrderRow) {
   return {
@@ -205,8 +207,10 @@ function orderDto(o: OrderRow) {
     clientPaid: o.client_paid,
     prepaidAmount: o.prepaid_amount ?? undefined,
     prepaidAt: o.prepaid_at?.toISOString() ?? undefined,
+    prepaymentReceipt: o.prepayment_receipt ?? undefined,
     finalPaidAmount: o.final_paid_amount ?? undefined,
     finalPaidAt: o.final_paid_at?.toISOString() ?? undefined,
+    finalPaymentReceipt: o.final_payment_receipt ?? undefined,
     totalPaid: o.total_paid,
     assignedManagerId: o.assigned_manager_id,
     assignedManager: o.users
@@ -328,7 +332,7 @@ ordersRouter.get(
     const status = normalizeText(req.query.status);
     const executionType = normalizeText(req.query.executionType);
 
-    const where: Prisma.OrderWhereInput = { company_id: companyId };
+    const where: Prisma.ordersWhereInput = { company_id: companyId };
 
     if (status && ORDER_STATUSES.includes(status as OrderStatus)) {
       where.status = status as OrderStatus;
@@ -349,7 +353,7 @@ ordersRouter.get(
       prisma.orders.count({ where }),
       prisma.orders.findMany({
         where,
-        orderBy: { [sortBy]: sortOrder } as Prisma.OrderOrderByWithRelationInput,
+        orderBy: { [sortBy]: sortOrder } as Prisma.ordersOrderByWithRelationInput,
         skip: (page - 1) * limit,
         take: limit,
         select: orderSelect,
@@ -397,7 +401,7 @@ ordersRouter.get(
       prisma.orders.findMany({
         where: {
           company_id: companyId,
-          status: { in: ['CONFIRMED', 'IN_TRANSIT'] },
+          status: { in: ['CONFIRMED', 'DRIVER_ACCEPTED', 'AWAITING_PREPAYMENT', 'PREPAID', 'IN_TRANSIT'] },
           OR: [{ driver_id: { not: null } }, { vehicle_id: { not: null } }],
         },
         select: { driver_id: true, vehicle_id: true, order_number: true, status: true },
@@ -508,6 +512,7 @@ ordersRouter.post(
 
     const created = await prisma.orders.create({
       data: {
+        id: crypto.randomUUID(),
         order_number: orderNumber,
         client_id: clientId,
         product_type: normalizeText(body.productType),
@@ -532,6 +537,7 @@ ordersRouter.post(
         assigned_manager_id: userId,
         notes: normalizeText(body.notes),
         company_id: companyId,
+        updated_at: new Date(),
       },
       select: orderSelect,
     });
@@ -566,8 +572,8 @@ ordersRouter.put(
     });
     if (!existing) return fail(res, 404, 'Order not found');
 
-    // Cannot edit delivered or cancelled orders (except notes)
-    if (existing.status === 'DELIVERED' || existing.status === 'CANCELLED') {
+    const FINISHED: OrderStatus[] = ['DELIVERED', 'AWAITING_FINAL_PAYMENT', 'COMPLETED', 'CANCELLED'];
+    if (FINISHED.includes(existing.status)) {
       return fail(res, 400, 'Cannot edit a finished order');
     }
 
@@ -582,7 +588,7 @@ ordersRouter.put(
       clientPrice,
     });
 
-    const data: Prisma.OrderUpdateInput = {
+    const data: Prisma.ordersUpdateInput = {
       ...(normalizeText(body.clientId) ? { clients: { connect: { id: body.clientId as string } } } : {}),
       ...(normalizeText(body.productType) !== undefined ? { product_type: normalizeText(body.productType) } : {}),
       ...(body.quantity !== undefined ? { quantity: toFloat(body.quantity) } : {}),
@@ -638,6 +644,7 @@ ordersRouter.patch(
       where: { id: req.params.id, company_id: companyId },
       select: { id: true, status: true, driver_id: true },
     });
+    if (!existing) return fail(res, 404, 'Order not found');
 
     // DRIVER може змінювати статус тільки для замовлень, де він призначений
     if (auth.roles.includes('DRIVER') && !auth.roles.includes('ADMIN') && !auth.roles.includes('LOGIST')) {
@@ -645,11 +652,10 @@ ordersRouter.patch(
         where: { user_id: auth.sub, company_id: companyId },
         select: { id: true },
       });
-        if (!driverProfile || existing?.driver_id !== driverProfile.id) {
+      if (!driverProfile || existing.driver_id !== driverProfile.id) {
         return fail(res, 403, 'Ви можете змінювати статус лише своїх замовлень');
       }
     }
-    if (!existing) return fail(res, 404, 'Order not found');
 
     // DRIVER: PREPAID → IN_TRANSIT; IN_TRANSIT → DELIVERED auto-transitions to AWAITING_FINAL_PAYMENT
     const isDriverOnly = auth.roles.includes('DRIVER') && !auth.roles.includes('ADMIN') && !auth.roles.includes('LOGIST');
@@ -722,7 +728,7 @@ ordersRouter.patch(
         where: { id: req.params.id },
         select: { clients: { select: { email: true, company_name: true } }, pickup_address: true, delivery_address: true },
       }).then((o) => {
-        if (!o?.client?.email) return;
+        if (!o?.clients?.email) return;
         sendOrderStatusUpdate({
           to: o.clients.email,
           clientName: o.clients.company_name,
@@ -739,7 +745,7 @@ ordersRouter.patch(
         where: { id: req.params.id },
         select: { clients: { select: { email: true, company_name: true } }, pickup_address: true, delivery_address: true },
       }).then((o) => {
-        if (!o?.client?.email) return;
+        if (!o?.clients?.email) return;
         sendOrderStatusUpdate({
           to: o.clients.email,
           clientName: o.clients.company_name,
@@ -820,16 +826,26 @@ ordersRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
 
-    const order = await prisma.orders.findFirst({
-      where: { id: req.params.id, company_id: companyId },
-      select: {
-        id: true,
-        status: true,
-        order_number: true,
-        client_price: true,
-        clients: { select: { email: true, company_name: true } },
-      },
-    });
+    const [order, activeAccount] = await Promise.all([
+      prisma.orders.findFirst({
+        where: { id: req.params.id, company_id: companyId },
+        select: {
+          id: true,
+          status: true,
+          order_number: true,
+          client_price: true,
+          estimated_fuel_cost: true,
+          estimated_salary_cost: true,
+          pickup_address: true,
+          delivery_address: true,
+          clients: { select: { email: true, company_name: true } },
+        },
+      }),
+      prisma.company_accounts.findFirst({
+        where: { company_id: companyId, is_active: true },
+        orderBy: { created_at: 'asc' },
+      }),
+    ]);
     if (!order) return fail(res, 404, 'Order not found');
     if (order.status !== 'DRIVER_ACCEPTED') {
       return fail(res, 400, `Cannot request prepayment from status ${order.status}`);
@@ -848,32 +864,128 @@ ordersRouter.post(
       previousStatus: 'DRIVER_ACCEPTED',
     });
 
-    // Create Invoice record + optionally send invoice email (fire-and-forget)
-    const invoiceAmount = order.client_price;
+    // Prepayment = fuel + salary (internal costs coverage)
+    const invoiceAmount = Math.round(
+      (order.estimated_fuel_cost ?? 0) + (order.estimated_salary_cost ?? 0),
+    );
     const invoiceNumber = `INV-${order.order_number}-PRE`;
     const dueDays = 7;
+    const bankAccount = activeAccount
+      ? { name: activeAccount.name, account: activeAccount.account }
+      : undefined;
 
     prisma.invoices.create({
       data: {
+        id: crypto.randomUUID(),
         order_id: order.id,
         company_id: companyId,
         type: 'PREPAYMENT',
         status: 'PENDING',
         amount: invoiceAmount,
         sent_at: new Date(),
+        updated_at: new Date(),
       },
     }).then(() => {
-      if (!order.client?.email) {
+      if (!order.clients?.email) {
         console.warn(`[EMAIL] No client email for order ${order.order_number} — invoice email skipped`);
         return;
       }
-      const clientEmail = order.client.email;
-      const clientName = order.client.company_name;
-      return generateInvoicePdf({ invoiceNumber, contractNumber: order.order_number, clientName, amount: invoiceAmount, dueDays })
-        .then((pdfBytes) => sendInvoice({ to: clientEmail, contractNumber: order.order_number, clientName, amount: invoiceAmount, dueDays, pdfBytes }));
+      const clientEmail = order.clients.email;
+      const clientName = order.clients.company_name;
+      return generateInvoicePdf({
+        invoiceNumber,
+        contractNumber: order.order_number,
+        clientName,
+        amount: invoiceAmount,
+        dueDays,
+        fuelCost: order.estimated_fuel_cost ?? 0,
+        salaryCost: order.estimated_salary_cost ?? 0,
+        pickupAddress: order.pickup_address,
+        deliveryAddress: order.delivery_address,
+        bankAccount,
+      }).then((pdfBytes) => sendInvoice({
+        to: clientEmail,
+        contractNumber: order.order_number,
+        clientName,
+        amount: invoiceAmount,
+        dueDays,
+        pdfBytes,
+      }));
     }).catch((err: unknown) => console.error('[EMAIL] invoice processing failed:', err));
 
     return ok(res, orderDto(updated));
+  }),
+);
+
+/* ─── POST /:id/resend-prepayment – повторна відправка рахунку ── */
+
+ordersRouter.post(
+  '/:id/resend-prepayment',
+  requireAuth,
+  authorize(['ADMIN', 'LOGIST']),
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+
+    const [order, activeAccount] = await Promise.all([
+      prisma.orders.findFirst({
+        where: { id: req.params.id, company_id: companyId },
+        select: {
+          id: true,
+          status: true,
+          order_number: true,
+          estimated_fuel_cost: true,
+          estimated_salary_cost: true,
+          pickup_address: true,
+          delivery_address: true,
+          clients: { select: { email: true, company_name: true } },
+        },
+      }),
+      prisma.company_accounts.findFirst({
+        where: { company_id: companyId, is_active: true },
+        orderBy: { created_at: 'asc' },
+      }),
+    ]);
+
+    if (!order) return fail(res, 404, 'Order not found');
+    if (order.status !== 'AWAITING_PREPAYMENT') {
+      return fail(res, 400, 'Замовлення не в статусі очікування авансу');
+    }
+    if (!order.clients?.email) {
+      return fail(res, 422, 'У клієнта не вказана електронна пошта');
+    }
+
+    const invoiceAmount = Math.round(
+      (order.estimated_fuel_cost ?? 0) + (order.estimated_salary_cost ?? 0),
+    );
+    const invoiceNumber = `INV-${order.order_number}-PRE`;
+    const dueDays = 7;
+    const bankAccount = activeAccount
+      ? { name: activeAccount.name, account: activeAccount.account }
+      : undefined;
+
+    const pdfBytes = await generateInvoicePdf({
+      invoiceNumber,
+      contractNumber: order.order_number,
+      clientName: order.clients.company_name,
+      amount: invoiceAmount,
+      dueDays,
+      fuelCost: order.estimated_fuel_cost ?? 0,
+      salaryCost: order.estimated_salary_cost ?? 0,
+      pickupAddress: order.pickup_address,
+      deliveryAddress: order.delivery_address,
+      bankAccount,
+    });
+
+    await sendInvoice({
+      to: order.clients.email,
+      contractNumber: order.order_number,
+      clientName: order.clients.company_name,
+      amount: invoiceAmount,
+      dueDays,
+      pdfBytes,
+    });
+
+    return ok(res, { sent: true, to: order.clients.email });
   }),
 );
 
@@ -884,17 +996,25 @@ ordersRouter.post(
   authorize(['ADMIN', 'LOGIST']),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const amount = typeof req.body?.amount === 'number' ? req.body.amount : null;
-    if (!amount || amount <= 0) return fail(res, 400, 'amount must be a positive number');
+    const receipt: string | null = typeof req.body?.receipt === 'string' ? req.body.receipt : null;
 
     const order = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        estimated_fuel_cost: true,
+        estimated_salary_cost: true,
+      },
     });
     if (!order) return fail(res, 404, 'Order not found');
     if (order.status !== 'AWAITING_PREPAYMENT') {
       return fail(res, 400, `Cannot mark prepaid from status ${order.status}`);
     }
+
+    const amount = Math.round(
+      (order.estimated_fuel_cost ?? 0) + (order.estimated_salary_cost ?? 0),
+    );
 
     const updated = await prisma.orders.update({
       where: { id: req.params.id },
@@ -902,6 +1022,7 @@ ordersRouter.post(
         status: 'PREPAID',
         prepaid_amount: amount,
         prepaid_at: new Date(),
+        prepayment_receipt: receipt,
         total_paid: amount,
       },
       select: orderSelect,
@@ -948,6 +1069,74 @@ ordersRouter.post(
   }),
 );
 
+/* ─── POST /:id/resend-final-invoice – повторна відправка фін. рахунку ── */
+
+ordersRouter.post(
+  '/:id/resend-final-invoice',
+  requireAuth,
+  authorize(['ADMIN', 'LOGIST']),
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+
+    const [order, activeAccount] = await Promise.all([
+      prisma.orders.findFirst({
+        where: { id: req.params.id, company_id: companyId },
+        select: {
+          id: true,
+          status: true,
+          order_number: true,
+          client_price: true,
+          prepaid_amount: true,
+          pickup_address: true,
+          delivery_address: true,
+          clients: { select: { email: true, company_name: true } },
+        },
+      }),
+      prisma.company_accounts.findFirst({
+        where: { company_id: companyId, is_active: true },
+        orderBy: { created_at: 'asc' },
+      }),
+    ]);
+
+    if (!order) return fail(res, 404, 'Order not found');
+    if (order.status !== 'AWAITING_FINAL_PAYMENT') {
+      return fail(res, 400, 'Замовлення не в статусі очікування фінальної оплати');
+    }
+    if (!order.clients?.email) {
+      return fail(res, 422, 'У клієнта не вказана електронна пошта');
+    }
+
+    const finalAmount = Math.max(0, order.client_price - (order.prepaid_amount ?? 0));
+    const invoiceNumber = `INV-${order.order_number}-FINAL`;
+    const dueDays = 7;
+    const bankAccount = activeAccount
+      ? { name: activeAccount.name, account: activeAccount.account }
+      : undefined;
+
+    const pdfBytes = await generateInvoicePdf({
+      invoiceNumber,
+      contractNumber: order.order_number,
+      clientName: order.clients.company_name,
+      amount: finalAmount,
+      dueDays,
+      pickupAddress: order.pickup_address,
+      deliveryAddress: order.delivery_address,
+      bankAccount,
+    });
+
+    await sendInvoice({
+      to: order.clients.email,
+      contractNumber: order.order_number,
+      clientName: order.clients.company_name,
+      amount: finalAmount,
+      dueDays,
+      pdfBytes,
+    });
+
+    return ok(res, { sent: true, to: order.clients.email });
+  }),
+);
+
 /* ─── POST /:id/mark-final-paid – фіксація фін. оплати ─ */
 
 ordersRouter.post(
@@ -955,8 +1144,7 @@ ordersRouter.post(
   authorize(['ADMIN', 'LOGIST']),
   asyncHandler(async (req: Request, res: Response) => {
     const companyId = getCompanyId(req);
-    const amount = typeof req.body?.amount === 'number' ? req.body.amount : null;
-    if (!amount || amount <= 0) return fail(res, 400, 'amount must be a positive number');
+    const receipt: string | null = typeof req.body?.receipt === 'string' ? req.body.receipt : null;
 
     const order = await prisma.orders.findFirst({
       where: { id: req.params.id, company_id: companyId },
@@ -964,6 +1152,7 @@ ordersRouter.post(
         id: true,
         status: true,
         order_number: true,
+        client_price: true,
         prepaid_amount: true,
         prepaid_at: true,
         clients: { select: { email: true, company_name: true } },
@@ -974,7 +1163,8 @@ ordersRouter.post(
       return fail(res, 400, `Cannot mark final paid from status ${order.status}`);
     }
 
-    const totalPaid = (order.prepaid_amount ?? 0) + amount;
+    const amount = Math.max(0, order.client_price - (order.prepaid_amount ?? 0));
+    const totalPaid = order.client_price;
 
     const updated = await prisma.orders.update({
       where: { id: req.params.id },
@@ -982,6 +1172,7 @@ ordersRouter.post(
         status: 'COMPLETED',
         final_paid_amount: amount,
         final_paid_at: new Date(),
+        final_payment_receipt: receipt,
         total_paid: totalPaid,
         client_paid: true,
       },
@@ -1031,6 +1222,7 @@ ordersRouter.post(
       }),
       prisma.invoices.create({
         data: {
+          id: crypto.randomUUID(),
           order_id: order.id,
           company_id: companyId,
           type: 'FINAL',
@@ -1038,16 +1230,17 @@ ordersRouter.post(
           amount,
           sent_at: new Date(),
           paid_at: new Date(),
+          updated_at: new Date(),
         },
       }),
     ]).then(() => {
-      if (!order.client?.email) {
+      if (!order.clients?.email) {
         console.warn(`[EMAIL] No client email for order ${order.order_number} — completion email skipped`);
         return;
       }
       return sendCompletionNotification({
-        to: order.client.email,
-        clientName: order.client.company_name,
+        to: order.clients.email,
+        clientName: order.clients.company_name,
         contractNumber: order.order_number,
         prepaidAmount,
         finalAmount: amount,
@@ -1101,5 +1294,42 @@ ordersRouter.get(
     res.setHeader('Content-Disposition', `attachment; filename="${order.order_number}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
     res.end(Buffer.from(pdfBytes));
+  }),
+);
+
+/* ─── POST /:id/send-pdf – email waybill to client ─────── */
+
+ordersRouter.post(
+  '/:id/send-pdf',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const companyId = getCompanyId(req);
+    const order = await prisma.orders.findFirst({
+      where: { id: req.params.id, company_id: companyId },
+      include: {
+        clients: true,
+        drivers: true,
+        vehicles: true,
+        carriers: true,
+        users: { select: { first_name: true, last_name: true, email: true } },
+      },
+    });
+    if (!order) return fail(res, 404, 'Order not found');
+
+    const clientEmail = order.clients?.email;
+    if (!clientEmail) return fail(res, 422, 'У клієнта не вказана електронна пошта');
+
+    const pdfBytes = await generateOrderPdf(order);
+
+    await sendOrderWaybill({
+      to: clientEmail,
+      clientName: order.clients!.company_name,
+      contractNumber: order.order_number,
+      pickupAddress: order.pickup_address,
+      deliveryAddress: order.delivery_address,
+      pdfBytes: Buffer.from(pdfBytes),
+    });
+
+    return ok(res, { sent: true, to: clientEmail });
   }),
 );

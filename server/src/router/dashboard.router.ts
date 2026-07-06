@@ -119,10 +119,11 @@ dashboardRouter.get('/summary', requireAuth, async (req, res: Response) => {
   const prev = previousRange(range.from, range.to);
   const prevEndMs = prev.to.getTime();
 
-  const activeStatuses: OrderStatus[] = ['NEW', 'CONFIRMED', 'IN_TRANSIT'];
+  const activeStatuses: OrderStatus[] = ['NEW', 'CONFIRMED', 'DRIVER_ACCEPTED', 'AWAITING_PREPAYMENT', 'PREPAID', 'IN_TRANSIT', 'AWAITING_FINAL_PAYMENT'];
 
-  const [activeNow, vehiclesTotal, activeWithVehicles, currentOrders, previousOrders] = await Promise.all([
+  const [activeNow, activePrev, vehiclesTotal, activeWithVehicles, currentOrders, previousOrders] = await Promise.all([
     prisma.orders.count({ where: { company_id: companyId, status: { in: activeStatuses } } }),
+    prisma.orders.count({ where: { company_id: companyId, created_at: { gte: prev.from, lte: prev.to }, status: { in: activeStatuses } } }),
     prisma.vehicles.count({ where: { company_id: companyId } }),
     prisma.orders.findMany({
       where: { company_id: companyId, status: { in: activeStatuses }, execution_type: 'INTERNAL', vehicle_id: { not: null } },
@@ -160,16 +161,16 @@ dashboardRouter.get('/summary', requireAuth, async (req, res: Response) => {
   const fleetUtilization = vehiclesTotal === 0 ? 0 : (uniqueBusyVehicles.size / vehiclesTotal) * 100;
 
   const nowMs = now.getTime();
+  const doneStatuses: OrderStatus[] = ['DELIVERED', 'AWAITING_FINAL_PAYMENT', 'COMPLETED', 'CANCELLED'];
   const overdueCurrent = currentOrders.filter(
-    (o) => o.delivery_date && o.delivery_date.getTime() < nowMs && o.status !== 'DELIVERED' && o.status !== 'CANCELLED',
+    (o) => o.delivery_date && o.delivery_date.getTime() < nowMs && !doneStatuses.includes(o.status),
   );
   const overduePrev = previousOrders.filter(
-    (o) =>
-      o.delivery_date && o.delivery_date.getTime() < prevEndMs && o.status !== 'DELIVERED' && o.status !== 'CANCELLED',
+    (o) => o.delivery_date && o.delivery_date.getTime() < prevEndMs && !doneStatuses.includes(o.status),
   );
 
-  const deliveredCurrent = currentOrders.filter((o) => o.status === 'DELIVERED' && o.delivery_date);
-  const deliveredPrev = previousOrders.filter((o) => o.status === 'DELIVERED' && o.delivery_date);
+  const deliveredCurrent = currentOrders.filter((o) => (o.status === 'DELIVERED' || o.status === 'COMPLETED') && o.delivery_date);
+  const deliveredPrev = previousOrders.filter((o) => (o.status === 'DELIVERED' || o.status === 'COMPLETED') && o.delivery_date);
 
   // OTD heuristic: consider delivered on-time if the record was marked DELIVERED before planned delivery_date.
   const otdCurrent =
@@ -249,7 +250,7 @@ dashboardRouter.get('/summary', requireAuth, async (req, res: Response) => {
   const summary: DashboardSummary = {
     period: { from: range.from.toISOString(), to: range.to.toISOString() },
     kpi: {
-      active_shipments: { value: activeNow, delta: 0 },
+      active_shipments: { value: activeNow, delta: activeNow - activePrev },
       overdue_shipments: { value: overdueCurrent.length, delta: overdueCurrent.length - overduePrev.length },
       otd_percent: { value: round1(otdCurrent), delta: round1(otdCurrent - otdPrev) },
       avg_delivery_hours: { value: round1(avgDeliveryCurrent), delta: round1(avgDeliveryCurrent - avgDeliveryPrev) },
@@ -327,12 +328,13 @@ dashboardRouter.get('/stats', requireAuth, async (req, res: Response) => {
       }),
     ]);
 
+  const count = (s: string) => byStatus.find((x) => x.status === s)?._count._all ?? 0;
   const ordersByStatus = {
-    new: byStatus.find((x) => x.status === 'NEW')?._count._all ?? 0,
-    confirmed: byStatus.find((x) => x.status === 'CONFIRMED')?._count._all ?? 0,
-    inTransit: byStatus.find((x) => x.status === 'IN_TRANSIT')?._count._all ?? 0,
-    delivered: byStatus.find((x) => x.status === 'DELIVERED')?._count._all ?? 0,
-    cancelled: byStatus.find((x) => x.status === 'CANCELLED')?._count._all ?? 0,
+    new: count('NEW'),
+    confirmed: count('CONFIRMED') + count('DRIVER_ACCEPTED'),
+    inTransit: count('IN_TRANSIT') + count('AWAITING_PREPAYMENT') + count('PREPAID'),
+    delivered: count('DELIVERED') + count('AWAITING_FINAL_PAYMENT') + count('COMPLETED'),
+    cancelled: count('CANCELLED'),
   };
 
   const ordersByExecution = {

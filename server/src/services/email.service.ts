@@ -366,3 +366,61 @@ export async function sendOrderStatusUpdate(params: SendStatusUpdateParams): Pro
     html,
   });
 }
+
+/* ─── sendOrderWaybill ───────────────────────────────────── */
+
+export interface SendOrderWaybillParams {
+  to: string;
+  clientName: string;
+  contractNumber: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  pdfBytes: Buffer;
+}
+
+export async function sendOrderWaybill(params: SendOrderWaybillParams): Promise<void> {
+  const { to, clientName, contractNumber, pickupAddress, deliveryAddress, pdfBytes } = params;
+
+  const transport = getTransporter();
+  if (!transport) {
+    console.log(`[EMAIL DEV] sendOrderWaybill → to: ${to}, contract: ${contractNumber}`);
+    return;
+  }
+
+  const html = `
+    <div style="${baseStyle}">
+      <div style="${cardStyle}">
+        ${header()}
+        <p style="margin:0 0 8px;">Доброго дня, <strong>${clientName}</strong>!</p>
+        <p style="color:#64748b;margin:0 0 24px;">
+          Надсилаємо товарно-транспортну накладну до договору <strong>${contractNumber}</strong>.
+        </p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+                    padding:16px 24px;margin-bottom:24px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="padding:6px 0;color:#64748b;font-size:13px;width:40%;">Завантаження:</td>
+              <td style="padding:6px 0;font-weight:600;font-size:13px;">${pickupAddress}</td>
+            </tr>
+            <tr style="border-top:1px solid #e2e8f0;">
+              <td style="padding:6px 0;color:#64748b;font-size:13px;">Розвантаження:</td>
+              <td style="padding:6px 0;font-weight:600;font-size:13px;">${deliveryAddress}</td>
+            </tr>
+          </table>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin:0;">
+          Накладна додана у вкладенні. Дякуємо, що обрали COLOS CRM.
+        </p>
+      </div>
+    </div>`;
+
+  await transport.sendMail({
+    from: env.SMTP_FROM,
+    to,
+    subject: `Накладна до договору №${contractNumber}`,
+    html,
+    attachments: [
+      { filename: `${contractNumber}.pdf`, content: pdfBytes, contentType: 'application/pdf' },
+    ],
+  });
+}

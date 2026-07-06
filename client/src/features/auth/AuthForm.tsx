@@ -192,27 +192,8 @@ export function AuthForm({ onSignedIn, onSignedOut }: { onSignedIn?: (tokens: Au
             {isSubmitting ? 'Зачекай…' : mode === 'signin' ? 'Увійти' : 'Створити акаунт'}
           </Button>
 
-          <div className="auth__meta">
-            <div className="auth__metaRow">
-              <span className="auth__metaLabel">API:</span>
-              <code className="auth__metaValue">{apiBaseUrl}</code>
-            </div>
-            <div className="auth__metaRow">
-              <span className="auth__metaLabel">Токени:</span>
-              <code className="auth__metaValue">{tokens ? 'є (localStorage)' : 'нема'}</code>
-              {tokens ? (
-                <Button type="button" variant="ghost" size="sm" className="auth__link" onClick={onLogout}>
-                  Вийти
-                </Button>
-              ) : null}
-            </div>
-          </div>
         </form>
       </section>
-
-      <footer className="auth__footer">
-        <span className="auth__hint">Поки що бекенд auth-ендпоїнти можуть бути заглушками.</span>
-      </footer>
       </div>
     </div>
   );

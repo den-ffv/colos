@@ -8,6 +8,21 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts';
 
+type OrderStatus = 'NEW' | 'CONFIRMED' | 'DRIVER_ACCEPTED' | 'AWAITING_PREPAYMENT' | 'PREPAID' | 'IN_TRANSIT' | 'DELIVERED' | 'AWAITING_FINAL_PAYMENT' | 'COMPLETED' | 'CANCELLED';
+
+const KANBAN_LABELS: Record<OrderStatus, string> = {
+  NEW: 'Новий',
+  CONFIRMED: 'Підтверджений',
+  DRIVER_ACCEPTED: 'Водій прийняв',
+  AWAITING_PREPAYMENT: 'Очікує авансу',
+  PREPAID: 'Аванс оплачено',
+  IN_TRANSIT: 'В дорозі',
+  DELIVERED: 'Доставлений',
+  AWAITING_FINAL_PAYMENT: 'Очікує доплати',
+  COMPLETED: 'Завершений',
+  CANCELLED: 'Скасований',
+};
+
 type Period = 'today' | 'week' | 'custom';
 
 type KpiValue = { value: number; delta: number };
@@ -24,7 +39,7 @@ type DashboardSummary = {
     margin_percent: KpiValue;
   };
   sla: { overdue_percent_of_active: number; indicator: 'green' | 'yellow' | 'red' };
-  kanban: Record<'NEW' | 'CONFIRMED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED', number>;
+  kanban: Record<'NEW' | 'CONFIRMED' | 'DRIVER_ACCEPTED' | 'AWAITING_PREPAYMENT' | 'PREPAID' | 'IN_TRANSIT' | 'DELIVERED' | 'AWAITING_FINAL_PAYMENT' | 'COMPLETED' | 'CANCELLED', number>;
   problematic_orders: Array<{
     id: string;
     order_number: string;
@@ -266,10 +281,10 @@ export function Dashboard({
           <div className="ui-card ops__card">
             <div className="ops__title">Операційна панель (канбан-статуси)</div>
             <div className="kanban">
-              {(['NEW', 'CONFIRMED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'] as const).map((s) => (
+              {(['NEW', 'CONFIRMED', 'DRIVER_ACCEPTED', 'AWAITING_PREPAYMENT', 'PREPAID', 'IN_TRANSIT', 'DELIVERED', 'AWAITING_FINAL_PAYMENT', 'COMPLETED', 'CANCELLED'] as const).map((s) => (
                 <div className="kanban__col" key={s}>
                   <div className="kanban__head">
-                    <span className="kanban__name">{s}</span>
+                    <span className="kanban__name">{KANBAN_LABELS[s]}</span>
                     <span className="kanban__count">{data ? data.kanban[s] : '—'}</span>
                   </div>
                   <div className="kanban__body">{data ? <span className="kanban__hint">Drill-down: буде список</span> : <span className="kanban__hint">—</span>}</div>

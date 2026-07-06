@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './company.css'
 import type { AuthTokens } from '../auth/auth.storage'
-import { apiGetJson, apiPutJson, type ApiError } from '../../lib/api'
+import { apiDeleteJson, apiGetJson, apiPostJson, apiPutJson, type ApiError } from '../../lib/api'
 import { isApiSuccess, type ApiResponse } from '../../lib/apiResponse'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -21,6 +21,14 @@ type Company = {
   usesBrokerServices: boolean
   createdAt: string
   updatedAt: string
+}
+
+type CompanyAccount = {
+  id: string
+  name: string
+  account: string
+  is_active: boolean
+  created_at: string
 }
 
 const OPERATION_MODE_LABELS: Record<OperationMode, string> = {
@@ -60,6 +68,68 @@ export function CompanyPage({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // ── Bank accounts state ──
+  const [accounts, setAccounts] = useState<CompanyAccount[]>([])
+  const [accLoading, setAccLoading] = useState(false)
+  const [accError, setAccError] = useState<string | null>(null)
+  const [accDrawerOpen, setAccDrawerOpen] = useState(false)
+  const [accEditTarget, setAccEditTarget] = useState<CompanyAccount | null>(null)
+  const [accForm, setAccForm] = useState({ name: '', account: '' })
+  const [accSaving, setAccSaving] = useState(false)
+  const [accSaveError, setAccSaveError] = useState<string | null>(null)
+
+  function loadAccounts() {
+    setAccLoading(true)
+    apiGetJson<ApiResponse<CompanyAccount[]>>('/api/company-accounts', { headers: authHeaders })
+      .then((res) => { if (isApiSuccess(res)) setAccounts(res.data) })
+      .catch((err: ApiError) => { if (err.status === 401) onUnauthorized(); else setAccError(err.message ?? 'Помилка') })
+      .finally(() => setAccLoading(false))
+  }
+
+  function openAccDrawer(acc?: CompanyAccount) {
+    setAccEditTarget(acc ?? null)
+    setAccForm({ name: acc?.name ?? '', account: acc?.account ?? '' })
+    setAccSaveError(null)
+    setAccDrawerOpen(true)
+  }
+
+  async function saveAccount() {
+    if (!accForm.name.trim() || !accForm.account.trim()) {
+      setAccSaveError('Всі поля обов\'язкові')
+      return
+    }
+    setAccSaving(true)
+    setAccSaveError(null)
+    try {
+      if (accEditTarget) {
+        await apiPutJson(`/api/company-accounts/${accEditTarget.id}`, accForm, { headers: authHeaders })
+      } else {
+        await apiPostJson('/api/company-accounts', accForm, { headers: authHeaders })
+      }
+      setAccDrawerOpen(false)
+      loadAccounts()
+    } catch (err) {
+      setAccSaveError((err as ApiError).message ?? 'Помилка збереження')
+    } finally {
+      setAccSaving(false)
+    }
+  }
+
+  async function toggleActive(acc: CompanyAccount) {
+    try {
+      await apiPutJson(`/api/company-accounts/${acc.id}`, { is_active: !acc.is_active }, { headers: authHeaders })
+      loadAccounts()
+    } catch { /* ignore */ }
+  }
+
+  async function deleteAccount(id: string) {
+    if (!confirm('Видалити рахунок?')) return
+    try {
+      await apiDeleteJson(`/api/company-accounts/${id}`, { headers: authHeaders })
+      loadAccounts()
+    } catch { /* ignore */ }
+  }
+
   function loadCompany() {
     setIsLoading(true)
     setError(null)
@@ -77,6 +147,7 @@ export function CompanyPage({
 
   useEffect(() => {
     void loadCompany()
+    loadAccounts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -175,6 +246,108 @@ export function CompanyPage({
           </tbody>
         </table>
       </Card>
+
+      {/* ── Bank accounts section ── */}
+      <div className="company__header" style={{ marginTop: 24 }}>
+        <h2 className="company__title">Банківські рахунки</h2>
+        {isAdmin && (
+          <Button variant="primary" onClick={() => openAccDrawer()}>
+            + Додати рахунок
+          </Button>
+        )}
+      </div>
+
+      {accError && <div className="company__saveError">{accError}</div>}
+
+      <Card>
+        {accLoading ? (
+          <div style={{ padding: 16, color: 'var(--muted)' }}>Завантаження…</div>
+        ) : accounts.length === 0 ? (
+          <div style={{ padding: 16, color: 'var(--muted)', fontSize: 13 }}>
+            Рахунки не додані. Додайте хоча б один активний рахунок — він буде вказаний у рахунках на оплату.
+          </div>
+        ) : (
+          <table className="company__table">
+            <thead>
+              <tr>
+                <th>Назва</th>
+                <th>Рахунок (IBAN)</th>
+                <th>Статус</th>
+                {isAdmin && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {accounts.map((acc) => (
+                <tr key={acc.id}>
+                  <td style={{ fontWeight: 600 }}>{acc.name}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{acc.account}</td>
+                  <td>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: acc.is_active ? 'rgba(22,163,74,0.1)' : 'rgba(100,100,100,0.1)',
+                      color: acc.is_active ? '#15803d' : 'var(--muted)',
+                    }}>
+                      {acc.is_active ? 'Активний' : 'Неактивний'}
+                    </span>
+                  </td>
+                  {isAdmin && (
+                    <td style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <Button size="sm" variant="ghost" onClick={() => openAccDrawer(acc)}>Редагувати</Button>
+                      <Button size="sm" variant="ghost" onClick={() => void toggleActive(acc)}>
+                        {acc.is_active ? 'Деактивувати' : 'Активувати'}
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => void deleteAccount(acc.id)}>Видалити</Button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* ── Account drawer ── */}
+      <Drawer
+        open={accDrawerOpen}
+        title={accEditTarget ? 'Редагувати рахунок' : 'Додати рахунок'}
+        onClose={() => setAccDrawerOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAccDrawerOpen(false)} disabled={accSaving}>
+              Скасувати
+            </Button>
+            <Button variant="primary" onClick={() => void saveAccount()} disabled={accSaving}>
+              {accSaving ? 'Збереження…' : 'Зберегти'}
+            </Button>
+          </>
+        }
+      >
+        <div className="company__form">
+          <label className="company__label">
+            Назва отримувача *
+            <input
+              className="company__input"
+              placeholder="ТОВ «Назва компанії»"
+              value={accForm.name}
+              onChange={(e) => setAccForm((f) => ({ ...f, name: e.target.value }))}
+            />
+          </label>
+          <label className="company__label">
+            Рахунок (IBAN) *
+            <input
+              className="company__input"
+              placeholder="UA12 3456 7890 0000 0001 2345 6789 0"
+              value={accForm.account}
+              onChange={(e) => setAccForm((f) => ({ ...f, account: e.target.value }))}
+            />
+          </label>
+          {accSaveError && <div className="company__saveError">{accSaveError}</div>}
+        </div>
+      </Drawer>
 
       <Drawer
         open={editOpen}

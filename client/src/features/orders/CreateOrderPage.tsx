@@ -36,6 +36,17 @@ type Coords = [number, number]
 
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ?? ''
 
+async function geocodeText(text: string): Promise<[number, number] | null> {
+  if (!MAPBOX_TOKEN || text.trim().length < 3) return null
+  try {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(text.trim())}.json?access_token=${MAPBOX_TOKEN}&limit=1&language=uk&types=address,place,locality,neighborhood`
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const data = await res.json() as { features?: { center: [number, number] }[] }
+    return data.features?.[0]?.center ?? null
+  } catch { return null }
+}
+
 function isSuccess<T>(r: ApiResponse<T>): r is { success: true; data: T } {
   return !!r && 'success' in r && (r as { success: unknown }).success === true
 }
@@ -74,8 +85,9 @@ function clearDraft() {
 const EMPTY: Record<string, string> = {
   clientId: '', executionType: 'INTERNAL',
   pickupAddress: '', deliveryAddress: '',
+  pickupLng: '', pickupLat: '', deliveryLng: '', deliveryLat: '',
   pickupDate: todayIso(), deliveryDate: '',
-  productType: '', quantity: '', unit: '', weight: '', volume: '',
+  productType: '', quantity: '', unit: '', weight: '', unitWeight: '', volume: '',
   driverId: '', vehicleId: '', estimatedFuelCost: '', estimatedSalaryCost: '',
   carrierId: '', carrierAgreedPrice: '', carrierVehicleInfo: '',
   clientPrice: '', notes: '',
@@ -85,7 +97,11 @@ const EMPTY: Record<string, string> = {
 
 /* ─── validation ─────────────────────────────────────────── */
 
-function validate(f: Record<string, string>, clientMode: 'existing' | 'new'): Record<string, string> {
+function validate(
+  f: Record<string, string>,
+  clientMode: 'existing' | 'new',
+  vehicles?: LookupVehicle[],
+): Record<string, string> {
   const e: Record<string, string> = {}
   if (clientMode === 'existing') {
     if (!f.clientId) e.clientId = 'Оберіть клієнта'
@@ -99,10 +115,19 @@ function validate(f: Record<string, string>, clientMode: 'existing' | 'new'): Re
   if (!f.deliveryAddress?.trim())          e.deliveryAddress = "Обов'язкове поле"
   else if (f.deliveryAddress.trim().length < 5) e.deliveryAddress = 'Мінімум 5 символів'
   if (!f.pickupDate)                       e.pickupDate = 'Вкажіть дату забору'
-  if (f.deliveryDate && f.pickupDate && Date.parse(f.deliveryDate) < Date.parse(f.pickupDate))
+  if (!f.deliveryDate)                     e.deliveryDate = "Обов'язкове поле"
+  else if (f.pickupDate && Date.parse(f.deliveryDate) < Date.parse(f.pickupDate))
     e.deliveryDate = 'Не може бути раніше дати забору'
   if (!f.clientPrice?.trim())             e.clientPrice = "Обов'язкове поле"
   else if (Number(f.clientPrice) < 0)     e.clientPrice = 'Повинна бути ≥ 0'
+  // Vehicle capacity check
+  if (f.executionType === 'INTERNAL' && f.vehicleId && vehicles) {
+    const vehicle = vehicles.find((v) => v.id === f.vehicleId)
+    const cargo = f.weight ? Number(f.weight) : null
+    if (vehicle && cargo && vehicle.capacity < cargo) {
+      e.vehicleId = `Авто не підходить: ${vehicle.capacity}т < ${cargo}т вантажу`
+    }
+  }
   return e
 }
 
@@ -151,7 +176,8 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
         notes:                d.notes ?? '',
       }
     }
-    return loadDraft() ?? { ...EMPTY }
+    const draft = loadDraft()
+    return draft ? { ...EMPTY, ...draft } : { ...EMPTY }
   })
 
   const [errors, setErrors]     = useState<Record<string, string>>({})
@@ -192,14 +218,24 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
 
   const onPickup = useCallback((sel: AddressSelection) => {
     setPickupCoords(sel.coords)
-    if (sel.coords && deliveryCoords) void calcDist(sel.coords, deliveryCoords)
-    else { setDistanceKm(null); setDurationHours(null) }
+    if (sel.coords) {
+      setForm((s) => ({ ...s, pickupLng: String(sel.coords![0]), pickupLat: String(sel.coords![1]) }))
+      if (deliveryCoords) void calcDist(sel.coords, deliveryCoords)
+    } else {
+      setForm((s) => ({ ...s, pickupLng: '', pickupLat: '' }))
+      setDistanceKm(null); setDurationHours(null)
+    }
   }, [deliveryCoords, calcDist])
 
   const onDelivery = useCallback((sel: AddressSelection) => {
     setDeliveryCoords(sel.coords)
-    if (pickupCoords && sel.coords) void calcDist(pickupCoords, sel.coords)
-    else { setDistanceKm(null); setDurationHours(null) }
+    if (sel.coords) {
+      setForm((s) => ({ ...s, deliveryLng: String(sel.coords![0]), deliveryLat: String(sel.coords![1]) }))
+      if (pickupCoords) void calcDist(pickupCoords, sel.coords)
+    } else {
+      setForm((s) => ({ ...s, deliveryLng: '', deliveryLat: '' }))
+      setDistanceKm(null); setDurationHours(null)
+    }
   }, [pickupCoords, calcDist])
 
   /* ── fuel prices ────────────────────────────────────── */
@@ -223,6 +259,52 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
     }
     void load()
   }, [authHeaders, onUnauthorized])
+
+  /* ── restore coords + distance on mount (from draft/edit) */
+  useEffect(() => {
+    const pLng = toNum(form.pickupLng ?? '')
+    const pLat = toNum(form.pickupLat ?? '')
+    const dLng = toNum(form.deliveryLng ?? '')
+    const dLat = toNum(form.deliveryLat ?? '')
+    if (pLng !== null && pLat !== null) {
+      const pCoords: Coords = [pLng, pLat]
+      setPickupCoords(pCoords)
+      if (dLng !== null && dLat !== null) {
+        const dCoords: Coords = [dLng, dLat]
+        setDeliveryCoords(dCoords)
+        void calcDist(pCoords, dCoords)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // runs only once on mount
+
+  /* ── auto-geocode pickup when typed without selecting dropdown ── */
+  useEffect(() => {
+    if (!form.pickupAddress.trim() || pickupCoords) return
+    const timer = setTimeout(async () => {
+      const c = await geocodeText(form.pickupAddress)
+      if (!c) return
+      setPickupCoords(c)
+      setForm((s) => ({ ...s, pickupLng: String(c[0]), pickupLat: String(c[1]) }))
+      if (deliveryCoords) void calcDist(c, deliveryCoords)
+    }, 600)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.pickupAddress, pickupCoords])
+
+  /* ── auto-geocode delivery when typed without selecting dropdown ── */
+  useEffect(() => {
+    if (!form.deliveryAddress.trim() || deliveryCoords) return
+    const timer = setTimeout(async () => {
+      const c = await geocodeText(form.deliveryAddress)
+      if (!c) return
+      setDeliveryCoords(c)
+      setForm((s) => ({ ...s, deliveryLng: String(c[0]), deliveryLat: String(c[1]) }))
+      if (pickupCoords) void calcDist(pickupCoords, c)
+    }, 600)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.deliveryAddress, deliveryCoords])
 
   useEffect(() => {
     type FuelRes = { fuel_type: string; price: number }[]
@@ -296,6 +378,21 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.driverId, form.executionType, form.pickupDate, form.deliveryDate, distanceKm, durationHours])
 
+  /* ── auto-calc weight from quantity + unit ──────────── */
+  useEffect(() => {
+    const qty = toNum(form.quantity)
+    if (qty === null) return
+    if (form.unit === 'тонн') {
+      setForm((s) => ({ ...s, weight: String(qty) }))
+    } else if (form.unit === 'палет' || form.unit === 'шт') {
+      const uw = toNum(form.unitWeight)
+      if (uw !== null) {
+        const tons = Math.round((qty * uw / 1000) * 1000) / 1000
+        setForm((s) => ({ ...s, weight: String(tons) }))
+      }
+    }
+  }, [form.quantity, form.unit, form.unitWeight])
+
   /* ── auto-save draft ────────────────────────────────── */
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -325,7 +422,7 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
 
   function blur(key: string) {
     setTouched((s) => ({ ...s, [key]: true }))
-    const errs = validate({ ...form }, clientMode)
+    const errs = validate({ ...form }, clientMode, lookups?.vehicles)
     if (errs[key]) setErrors((s) => ({ ...s, [key]: errs[key] }))
     else setErrors((s) => { const c = { ...s }; delete c[key]; return c })
   }
@@ -339,7 +436,7 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
     const allTouched: Record<string, boolean> = {}
     Object.keys(form).forEach((k) => { allTouched[k] = true })
     setTouched(allTouched)
-    const errs = validate(form, clientMode)
+    const errs = validate(form, clientMode, lookups?.vehicles)
     setErrors(errs)
     if (Object.keys(errs).length) {
       const firstKey = Object.keys(errs)[0]
@@ -681,15 +778,25 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
                 {fieldErr('pickupDate') && <span className="co__err">{fieldErr('pickupDate')}</span>}
               </div>
               <div className="co__field" id="field-deliveryDate">
-                <label className="co__label">Планова дата доставки</label>
+                <label className="co__label">Планова дата доставки <span className="co__req">*</span></label>
                 <input
                   type="datetime-local"
                   className={`co__input${fieldErr('deliveryDate') ? ' co__input--err' : ''}`}
                   value={form.deliveryDate}
+                  min={form.pickupDate || undefined}
                   onChange={(e) => set('deliveryDate', e.target.value)}
                   onBlur={() => blur('deliveryDate')}
                 />
                 {fieldErr('deliveryDate') && <span className="co__err">{fieldErr('deliveryDate')}</span>}
+                {!fieldErr('deliveryDate') && durationHours && form.pickupDate && (
+                  <span className="co__hint">
+                    Мін. рекомендована: {(() => {
+                      const d = new Date(form.pickupDate)
+                      d.setMinutes(d.getMinutes() + Math.ceil(durationHours * 60))
+                      return d.toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    })()} (час рейсу ~{Math.ceil(durationHours)}год)
+                  </span>
+                )}
               </div>
             </div>
           </section>
@@ -723,10 +830,39 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
                 </div>
               </div>
               <div className="co__field">
-                <label className="co__label">Маса (т)</label>
-                <input type="number" min="0" step="0.1" className="co__input" value={form.weight} onChange={(e) => set('weight', e.target.value)} placeholder="0.0" />
+                <label className="co__label">
+                  Маса (т)
+                  {(form.unit === 'тонн' || ((form.unit === 'палет' || form.unit === 'шт') && form.unitWeight)) && (
+                    <span className="co__calcBadge">авто</span>
+                  )}
+                </label>
+                <input
+                  type="number" min="0" step="0.001"
+                  className="co__input"
+                  value={form.weight}
+                  readOnly={form.unit === 'тонн' || ((form.unit === 'палет' || form.unit === 'шт') && !!form.unitWeight)}
+                  onChange={(e) => set('weight', e.target.value)}
+                  placeholder="0.000"
+                />
+                {form.unit === 'тонн' && <span className="co__hint">Дорівнює кількості</span>}
+                {form.unit === 'м³' && <span className="co__hint">Введіть вручну (об'єм ≠ вага)</span>}
               </div>
             </div>
+
+            {/* Extra field: weight per unit for палет/шт */}
+            {(form.unit === 'палет' || form.unit === 'шт') && (
+              <div className="co__field" style={{ maxWidth: '200px' }}>
+                <label className="co__label">Вага одиниці (кг)</label>
+                <input
+                  type="number" min="0" step="0.1"
+                  className="co__input"
+                  value={form.unitWeight}
+                  onChange={(e) => set('unitWeight', e.target.value)}
+                  placeholder="0.0"
+                />
+                <span className="co__hint">Маса = К-сть × вага / 1000</span>
+              </div>
+            )}
           </section>
 
           {/* ── Section 3: Executor ─────────────── */}
@@ -806,6 +942,15 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
                     {form.vehicleId && (lookups?.vehicles ?? []).find((v) => v.id === form.vehicleId)?.isBusy && (
                       <span className="co__resWarn">⚠ Авто вже використовується в іншому договорі</span>
                     )}
+                    {(() => {
+                      const vehicle = (lookups?.vehicles ?? []).find((v) => v.id === form.vehicleId)
+                      const cargo = toNum(form.weight)
+                      if (!vehicle || cargo === null || cargo === 0) return null
+                      if (vehicle.capacity >= cargo) {
+                        return <span className="co__resOk">✓ Вантажопідйомність OK ({vehicle.capacity}т ≥ {cargo}т)</span>
+                      }
+                      return <span className="co__resWarn">⚠ Авто не підходить: {vehicle.capacity}т &lt; {cargo}т вантажу</span>
+                    })()}
                   </div>
                 </div>
                 <div className="co__row2">
@@ -886,24 +1031,36 @@ export function CreateOrderPage({ tokens, onUnauthorized, editOrder, onSaved, on
             </div>
 
             {/* Live margin preview */}
-            {(liveMargin.price > 0 || liveMargin.cost > 0) && (
-              <div className={`co__marginCard${liveMargin.margin < 0 ? ' co__marginCard--loss' : ' co__marginCard--profit'}`}>
-                <div className="co__marginRow">
-                  <span>Ціна клієнта</span>
-                  <strong>{liveMargin.price.toLocaleString('uk-UA')} ₴</strong>
+            {(liveMargin.price > 0 || liveMargin.cost > 0) && (() => {
+              const pct = liveMargin.pct
+              let band: { cls: string; icon: string; msg: string }
+              if (liveMargin.margin < 0)  band = { cls: 'co__marginCard--loss',   icon: '🔴', msg: 'Рейс збитковий' }
+              else if (pct < 15)          band = { cls: 'co__marginCard--loss',   icon: '🔴', msg: 'Низькомаржинальний рейс' }
+              else if (pct <= 40)         band = { cls: 'co__marginCard--profit', icon: '🟢', msg: 'Норма для логістики' }
+              else if (pct <= 60)         band = { cls: 'co__marginCard--warn',   icon: '🟡', msg: 'Перевір правильність витрат' }
+              else                        band = { cls: 'co__marginCard--loss',   icon: '🔴', msg: 'Аномалія — перевір дані' }
+              return (
+                <div className={`co__marginCard ${band.cls}`}>
+                  <div className="co__marginRow">
+                    <span>Ціна клієнта</span>
+                    <strong>{liveMargin.price.toLocaleString('uk-UA')} ₴</strong>
+                  </div>
+                  <div className="co__marginRow">
+                    <span>Собівартість</span>
+                    <span>{liveMargin.cost.toLocaleString('uk-UA')} ₴</span>
+                  </div>
+                  <div className="co__marginRow co__marginRow--total">
+                    <span>Маржа</span>
+                    <strong>
+                      {liveMargin.margin.toLocaleString('uk-UA')} ₴ ({pct.toFixed(1)}%)
+                    </strong>
+                  </div>
+                  <div className="co__marginBand">
+                    {band.icon} {band.msg}
+                  </div>
                 </div>
-                <div className="co__marginRow">
-                  <span>Собівартість</span>
-                  <span>{liveMargin.cost.toLocaleString('uk-UA')} ₴</span>
-                </div>
-                <div className="co__marginRow co__marginRow--total">
-                  <span>Маржа</span>
-                  <strong style={{ color: liveMargin.margin >= 0 ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)' }}>
-                    {liveMargin.margin.toLocaleString('uk-UA')} ₴ ({liveMargin.pct.toFixed(1)}%)
-                  </strong>
-                </div>
-              </div>
-            )}
+              )
+            })()}
 
             <div className="co__field">
               <label className="co__label">Нотатки</label>

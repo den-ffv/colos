@@ -7,13 +7,13 @@ import type { Prisma } from '@prisma/client';
 
 /* ─── Types ─────────────────────────────────────────────── */
 
-type OrderForPdf = Prisma.OrderGetPayload<{
+type OrderForPdf = Prisma.ordersGetPayload<{
   include: {
-    client: true;
-    driver: true;
-    vehicle: true;
-    carrier: true;
-    assigned_manager: { select: { first_name: true; last_name: true; email: true } };
+    clients: true;
+    drivers: true;
+    vehicles: true;
+    carriers: true;
+    users: { select: { first_name: true; last_name: true; email: true } };
   };
 }>;
 
@@ -269,10 +269,10 @@ export async function generateOrderPdf(order: OrderForPdf): Promise<Uint8Array> 
 
   /* ── Замовник ── */
   section('Замовник');
-  row('Компанія', order.client?.company_name ?? '—');
-  row('Контактна особа', order.client?.contact_person ?? '—');
-  row('Email', order.client?.email ?? '—');
-  row('Телефон', order.client?.phone ?? '—');
+  row('Компанія', order.clients?.company_name ?? '—');
+  row('Контактна особа', order.clients?.contact_person ?? '—');
+  row('Email', order.clients?.email ?? '—');
+  row('Телефон', order.clients?.phone ?? '—');
   y -= 6;
 
   /* ── Маршрут ── */
@@ -297,11 +297,11 @@ export async function generateOrderPdf(order: OrderForPdf): Promise<Uint8Array> 
   /* ── Виконавець ── */
   section('Виконавець');
   if (order.execution_type === 'INTERNAL') {
-    const driverName = order.driver
-      ? `${order.driver.first_name} ${order.driver.last_name}`
+    const driverName = order.drivers
+      ? `${order.drivers.first_name} ${order.drivers.last_name}`
       : '—';
-    const vehicleInfo = order.vehicle
-      ? `${order.vehicle.plate_number} (${order.vehicle.type})`
+    const vehicleInfo = order.vehicles
+      ? `${order.vehicles.plate_number} (${order.vehicles.type})`
       : '—';
     twoCol('Водій', driverName, 'Транспортний засіб', vehicleInfo);
     twoCol(
@@ -309,8 +309,8 @@ export async function generateOrderPdf(order: OrderForPdf): Promise<Uint8Array> 
       'Витрати на зарплату', order.estimated_salary_cost != null ? `${fmt(order.estimated_salary_cost)} грн` : '—',
     );
   } else {
-    row('Перевізник', order.carrier?.company_name ?? '—');
-    row('Контакт перевізника', order.carrier?.contact_person ?? '—');
+    row('Перевізник', order.carriers?.company_name ?? '—');
+    row('Контакт перевізника', order.carriers?.contact_person ?? '—');
     row('Авто перевізника', order.carrier_vehicle_info ?? '—');
     twoCol(
       'Ціна перевізника', order.carrier_agreed_price != null ? `${fmt(order.carrier_agreed_price)} грн` : '—',
@@ -333,10 +333,10 @@ export async function generateOrderPdf(order: OrderForPdf): Promise<Uint8Array> 
 
   /* ── Менеджер ── */
   section('Відповідальний менеджер');
-  const managerName = order.assigned_manager
-    ? `${order.assigned_manager.first_name} ${order.assigned_manager.last_name}`
+  const managerName = order.users
+    ? `${order.users.first_name} ${order.users.last_name}`
     : '—';
-  twoCol('Менеджер', managerName, 'Email', order.assigned_manager?.email ?? '—');
+  twoCol('Менеджер', managerName, 'Email', order.users?.email ?? '—');
   y -= 6;
 
   /* ── Примітки ── */
@@ -383,79 +383,139 @@ export interface InvoicePdfParams {
   clientName: string;
   amount: number;
   dueDays: number;
+  fuelCost?: number;
+  salaryCost?: number;
+  pickupAddress?: string;
+  deliveryAddress?: string;
+  bankAccount?: { name: string; account: string };
 }
 
 export async function generateInvoicePdf(params: InvoicePdfParams): Promise<Buffer> {
-  const { invoiceNumber, contractNumber, clientName, amount, dueDays } = params;
+  const {
+    invoiceNumber, contractNumber, clientName, amount, dueDays,
+    fuelCost, salaryCost, pickupAddress, deliveryAddress, bankAccount,
+  } = params;
 
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
   const fontBold = await pdfDoc.embedFont(arialBoldBytes);
-  const fontReg = await pdfDoc.embedFont(arialBytes);
+  const fontReg  = await pdfDoc.embedFont(arialBytes);
 
-  const page = pdfDoc.addPage([595, 842]); // A4
+  const page = pdfDoc.addPage([595, 842]);
   const { width, height } = page.getSize();
 
-  const cBlue: RGB = rgb(0.086, 0.322, 0.812);
-  const cGray: RGB = rgb(0.45, 0.45, 0.45);
+  const cBlue:  RGB = rgb(0.086, 0.322, 0.812);
+  const cGray:  RGB = rgb(0.45, 0.45, 0.45);
   const cBlack: RGB = rgb(0.08, 0.08, 0.08);
-  const cLine: RGB = rgb(0.88, 0.90, 0.93);
+  const cLine:  RGB = rgb(0.88, 0.90, 0.93);
+  const cBg:    RGB = rgb(0.975, 0.977, 0.982);
   const ML = 44;
   const MR = 44;
-  const contentWidth = width - ML - MR;
+  const CW = width - ML - MR;
 
   let y = height - 50;
 
-  // Header
+  // ── Header ──
   page.drawText('COLOS', { x: ML, y, size: 22, font: fontBold, color: cBlue });
   page.drawText(' CRM', { x: ML + 72, y, size: 22, font: fontReg, color: cGray });
   y -= 16;
   page.drawLine({ start: { x: ML, y }, end: { x: width - MR, y }, thickness: 2, color: cBlue });
   y -= 28;
 
-  // Title
-  page.drawText('РАХУНОК НА ОПЛАТУ', { x: ML, y, size: 16, font: fontBold, color: cBlack });
-  y -= 28;
+  page.drawText('РАХУНОК НА ОПЛАТУ (АВАНС)', { x: ML, y, size: 15, font: fontBold, color: cBlack });
+  y -= 30;
 
-  // Meta row
+  // ── Meta ──
   const issueDate = new Date().toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const dueDate = new Date(Date.now() + dueDays * 86400000).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const dueDate   = new Date(Date.now() + dueDays * 86400000).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  function metaRow(label: string, value: string, yPos: number) {
-    page.drawText(label, { x: ML, y: yPos, size: 10, font: fontReg, color: cGray });
-    page.drawText(value, { x: ML + 160, y: yPos, size: 10, font: fontBold, color: cBlack });
+  function metaRow(label: string, value: string) {
+    page.drawText(label, { x: ML, y, size: 10, font: fontReg, color: cGray });
+    page.drawText(value, { x: ML + 170, y, size: 10, font: fontBold, color: cBlack });
+    y -= 18;
   }
 
-  metaRow('Номер рахунку:', invoiceNumber, y); y -= 18;
-  metaRow('Договір:', contractNumber, y); y -= 18;
-  metaRow('Клієнт:', clientName, y); y -= 18;
-  metaRow('Дата виставлення:', issueDate, y); y -= 18;
-  metaRow('Термін оплати:', `до ${dueDate} (${dueDays} дн.)`, y); y -= 28;
+  metaRow('Номер рахунку:', invoiceNumber);
+  metaRow('Договір:', contractNumber);
+  metaRow('Клієнт:', clientName);
+  metaRow('Дата виставлення:', issueDate);
+  metaRow('Термін оплати:', `до ${dueDate} (${dueDays} дн.)`);
+  y -= 8;
 
-  // Divider
+  // ── Route ──
+  if (pickupAddress || deliveryAddress) {
+    page.drawLine({ start: { x: ML, y }, end: { x: width - MR, y }, thickness: 0.4, color: cLine });
+    y -= 14;
+    page.drawText('МАРШРУТ', { x: ML, y, size: 8, font: fontBold, color: cBlue });
+    y -= 12;
+    if (pickupAddress) {
+      page.drawText('Завантаження:', { x: ML, y, size: 9, font: fontReg, color: cGray });
+      page.drawText(pickupAddress, { x: ML + 100, y, size: 9, font: fontReg, color: cBlack });
+      y -= 13;
+    }
+    if (deliveryAddress) {
+      page.drawText('Розвантаження:', { x: ML, y, size: 9, font: fontReg, color: cGray });
+      page.drawText(deliveryAddress, { x: ML + 100, y, size: 9, font: fontReg, color: cBlack });
+      y -= 13;
+    }
+    y -= 6;
+  }
+
+  // ── Cost breakdown ──
+  if (fuelCost !== undefined || salaryCost !== undefined) {
+    page.drawLine({ start: { x: ML, y }, end: { x: width - MR, y }, thickness: 0.4, color: cLine });
+    y -= 14;
+    page.drawText('СКЛАД АВАНСУ', { x: ML, y, size: 8, font: fontBold, color: cBlue });
+    y -= 12;
+
+    page.drawRectangle({ x: ML, y: y - 4, width: CW, height: 46, color: cBg, borderColor: cLine, borderWidth: 0.5 });
+
+    function costRow(label: string, val: number) {
+      page.drawText(label, { x: ML + 10, y, size: 9.5, font: fontReg, color: cGray });
+      const vs = `${val.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн`;
+      page.drawText(vs, { x: width - MR - fontBold.widthOfTextAtSize(vs, 9.5) - 10, y, size: 9.5, font: fontBold, color: cBlack });
+      y -= 16;
+    }
+
+    if (fuelCost !== undefined)   costRow('Витрати на паливо:', fuelCost);
+    if (salaryCost !== undefined) costRow('Зарплата водія:', salaryCost);
+    y -= 6;
+  }
+
+  // ── Total amount ──
   page.drawLine({ start: { x: ML, y }, end: { x: width - MR, y }, thickness: 0.5, color: cLine });
-  y -= 24;
-
-  // Amount block
-  const amountFormatted = amount.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  y -= 22;
   page.drawText('До сплати:', { x: ML, y, size: 12, font: fontReg, color: cGray });
-  page.drawText(`${amountFormatted} грн`, { x: ML + contentWidth - fontBold.widthOfTextAtSize(`${amountFormatted} грн`, 18), y: y - 2, size: 18, font: fontBold, color: cBlue });
+  const amtStr = `${amount.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн`;
+  page.drawText(amtStr, { x: width - MR - fontBold.widthOfTextAtSize(amtStr, 20), y: y - 3, size: 20, font: fontBold, color: cBlue });
   y -= 40;
 
-  // Note
-  page.drawText('Будь ласка, здійсніть оплату авансу для початку виконання договору.', {
-    x: ML, y, size: 9, font: fontReg, color: cGray,
-  });
-  y -= 14;
-  page.drawText('Після оплати повідомте вашого менеджера.', {
-    x: ML, y, size: 9, font: fontReg, color: cGray,
+  // ── Bank account ──
+  if (bankAccount) {
+    page.drawLine({ start: { x: ML, y }, end: { x: width - MR, y }, thickness: 0.4, color: cLine });
+    y -= 14;
+    page.drawText('РЕКВІЗИТИ ДЛЯ ОПЛАТИ', { x: ML, y, size: 8, font: fontBold, color: cBlue });
+    y -= 12;
+    page.drawText('Отримувач:', { x: ML, y, size: 9.5, font: fontReg, color: cGray });
+    page.drawText(bankAccount.name, { x: ML + 100, y, size: 9.5, font: fontBold, color: cBlack });
+    y -= 14;
+    page.drawText('Рахунок (IBAN):', { x: ML, y, size: 9.5, font: fontReg, color: cGray });
+    page.drawText(bankAccount.account, { x: ML + 100, y, size: 9.5, font: fontBold, color: cBlack });
+    y -= 14;
+    page.drawText('Призначення платежу:', { x: ML, y, size: 9.5, font: fontReg, color: cGray });
+    page.drawText(`Аванс за договором №${contractNumber}`, { x: ML + 100, y, size: 9.5, font: fontReg, color: cBlack });
+    y -= 18;
+  }
+
+  // ── Note ──
+  page.drawText('Будь ласка, здійсніть оплату у зазначений термін та повідомте менеджера.', {
+    x: ML, y, size: 8.5, font: fontReg, color: cGray,
   });
 
-  // Footer
-  page.drawText(`Сформовано: ${issueDate}`, {
-    x: ML, y: 20, size: 8, font: fontReg, color: cGray,
-  });
+  // ── Footer ──
+  page.drawText(`Сформовано: ${issueDate}`, { x: ML, y: 20, size: 8, font: fontReg, color: cGray });
+  page.drawRectangle({ x: 0, y: 0, width, height: 4, color: cBlue });
 
   const bytes = await pdfDoc.save();
   return Buffer.from(bytes);
